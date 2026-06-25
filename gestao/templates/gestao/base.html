@@ -1,0 +1,44 @@
+{% load static gestao_tags %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Leandro GNV{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-icon">🔥</div>
+      Leandro GNV
+    </div>
+    <div class="topbar-actions">
+      <a href="{% url 'exportar_csv' %}" class="btn btn-topbar">📥 Exportar CSV</a>
+      <span style="color:#888;font-size:12px">{{ user.username }}</span>
+      <a href="{% url 'logout' %}" class="btn btn-topbar" style="font-size:12px">Sair</a>
+    </div>
+  </div>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="nav-section">Menu</div>
+      <a href="{% url 'dashboard' %}" class="nav-item {% if page == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
+      <a href="{% url 'ordens' %}" class="nav-item {% if page == 'ordens' %}active{% endif %}">📋 Ordens de Serviço</a>
+      <div class="nav-section">Relatórios</div>
+      <a href="{% url 'financeiro' %}" class="nav-item {% if page == 'financeiro' %}active{% endif %}">📈 Financeiro</a>
+      <a href="{% url 'colaboradores' %}" class="nav-item {% if page == 'colaboradores' %}active{% endif %}">👥 Colaboradores</a>
+    </div>
+    <div class="main">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="alert {% if msg.tags == 'error' %}alert-error{% elif msg.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% block modals %}{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

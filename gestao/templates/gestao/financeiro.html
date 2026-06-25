@@ -1,0 +1,36 @@
+{% extends "gestao/base.html" %}
+{% load gestao_tags %}
+{% block title %}Financeiro — Leandro GNV{% endblock %}
+{% block content %}
+<div class="page-header"><div class="page-title">Financeiro</div></div>
+<div class="tab-bar">
+  <a href="?periodo=mes" class="tab {% if periodo == 'mes' %}active{% endif %}">Este mês</a>
+  <a href="?periodo=trimestre" class="tab {% if periodo == 'trimestre' %}active{% endif %}">Trimestre</a>
+  <a href="?periodo=tudo" class="tab {% if periodo == 'tudo' %}active{% endif %}">Tudo</a>
+</div>
+<div class="metrics-row" style="grid-template-columns:repeat(4,1fr)">
+  <div class="metric m-fat"><div class="metric-label">Faturamento</div><div class="metric-val" style="font-size:16px">{{ faturamento|brl }}</div></div>
+  <div class="metric m-mat"><div class="metric-label">Custo materiais</div><div class="metric-val" style="font-size:16px">{{ custo_mat|brl }}</div></div>
+  <div class="metric m-com"><div class="metric-label">Comissões</div><div class="metric-val" style="font-size:16px">{{ comissoes|brl }}</div></div>
+  <div class="metric {% if lucro >= 0 %}m-lpos{% else %}m-lneg{% endif %}"><div class="metric-label">Lucro bruto</div><div class="metric-val" style="font-size:16px">{{ lucro|brl }}</div></div>
+</div>
+<div class="card" style="padding:0;overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th style="width:5%">#</th><th style="width:17%">Cliente</th><th style="width:17%">Serviço</th>
+      <th style="width:9%">Data</th><th style="width:11%">Cobrado</th><th style="width:10%">Material</th>
+      <th style="width:10%">Comissão</th><th style="width:11%">Pagamento</th><th style="width:10%">Lucro</th>
+    </tr></thead>
+    <tbody>
+      {% for os in ordens_list %}
+      <tr>
+        <td style="color:#888;font-size:11px">{{ os.pk }}</td><td>{{ os.nome_cliente }}</td><td>{{ os.servico }}</td>
+        <td>{{ os.data|date:"d/m/Y" }}</td><td>{{ os.valor|brl }}</td><td>{{ os.material|brl }}</td>
+        <td>{{ os.comissao|brl }}</td><td><span class="badge badge-gray" style="font-size:10px">{{ os.pagamento|default:"-" }}</span></td>
+        <td><span class="{{ os.lucro|lucro_class }}">{{ os.lucro|brl }}</span></td>
+      </tr>
+      {% empty %}<tr><td colspan="9"><div class="empty-state">Sem registros no período</div></td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

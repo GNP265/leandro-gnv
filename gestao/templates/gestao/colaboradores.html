@@ -1,0 +1,59 @@
+{% extends "gestao/base.html" %}
+{% load gestao_tags %}
+{% block title %}Colaboradores — Leandro GNV{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Colaboradores</div>
+  <button class="btn btn-primary" onclick="document.getElementById('modal-colab').classList.add('open')">➕ Adicionar colaborador</button>
+</div>
+<div class="tab-bar">
+  <a href="?periodo=semana" class="tab {% if periodo == 'semana' %}active{% endif %}">Esta semana</a>
+  <a href="?periodo=mes" class="tab {% if periodo == 'mes' %}active{% endif %}">Este mês</a>
+  <a href="?periodo=trimestre" class="tab {% if periodo == 'trimestre' %}active{% endif %}">Trimestre</a>
+  <a href="?periodo=ano" class="tab {% if periodo == 'ano' %}active{% endif %}">Este ano</a>
+</div>
+{% for item in colab_data %}
+<div class="colab-card">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="avatar" style="width:40px;height:40px;background:#FAEEDA;color:#854F0B;font-size:14px">{{ item.colab.nome|make_list|first }}</div>
+      <div>
+        <div style="font-weight:500;font-size:15px">{{ item.colab.nome }}</div>
+        <div style="font-size:12px;color:#888">OS {{ periodo_label }}: {{ item.total_os }}</div>
+      </div>
+    </div>
+    <a href="{% url 'colab_remove' item.colab.pk %}" class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="return confirm('Remover {{ item.colab.nome }}?')">🗑</a>
+  </div>
+  <div class="colab-stat-grid">
+    <div class="colab-stat"><div class="colab-stat-label">OS realizadas</div><div class="colab-stat-val" style="color:#185FA5">{{ item.total_os }}</div></div>
+    <div class="colab-stat"><div class="colab-stat-label">Faturamento gerado</div><div class="colab-stat-val" style="color:#BA7517;font-size:13px">{{ item.faturamento|brl }}</div></div>
+    <div class="colab-stat"><div class="colab-stat-label">Comissão ganha</div><div class="colab-stat-val">{{ item.comissoes|brl }}</div></div>
+    <div class="colab-stat"><div class="colab-stat-label">Ticket médio</div><div class="colab-stat-val" style="font-size:13px">{{ item.ticket|brl }}</div></div>
+  </div>
+</div>
+{% empty %}
+<div class="empty-state card">Nenhum colaborador cadastrado<br><span style="font-size:12px;margin-top:4px;display:block">Clique em "Adicionar colaborador" para começar</span></div>
+{% endfor %}
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="modal-colab">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">Adicionar colaborador</div>
+      <button class="btn" onclick="document.getElementById('modal-colab').classList.remove('open')" style="padding:4px 8px;border:none">✕</button>
+    </div>
+    <form method="post" action="{% url 'colab_add' %}">
+      {% csrf_token %}
+      <div class="field" style="margin-bottom:1rem">
+        <label>Nome do colaborador</label>
+        <input name="nome" required placeholder="Ex: Carlos Oliveira" autofocus>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('modal-colab').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">✅ Adicionar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

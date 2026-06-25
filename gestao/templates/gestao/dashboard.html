@@ -1,0 +1,42 @@
+{% extends "gestao/base.html" %}
+{% load gestao_tags %}
+{% block title %}Dashboard — Leandro GNV{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Dashboard</div>
+  <span class="period-badge">{{ periodo_label }}</span>
+</div>
+<div class="metrics-row" style="grid-template-columns:repeat(3,1fr)">
+  <div class="metric m-fat"><div class="metric-label">Faturamento mensal</div><div class="metric-val" style="font-size:16px">{{ faturamento|brl }}</div></div>
+  <div class="metric {% if lucro >= 0 %}m-lpos{% else %}m-lneg{% endif %}"><div class="metric-label">Lucro bruto</div><div class="metric-val" style="font-size:16px">{{ lucro|brl }}</div></div>
+  <div class="metric m-mat"><div class="metric-label">Custo materiais</div><div class="metric-val" style="font-size:16px">{{ custo_mat|brl }}</div></div>
+</div>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><div class="card-title">🕐 Últimas ordens</div></div>
+    <table>
+      <thead><tr><th style="width:34%">Cliente</th><th style="width:30%">Serviço</th><th style="width:18%">Valor</th><th style="width:18%">Status</th></tr></thead>
+      <tbody>
+        {% for os in recentes %}
+        <tr><td>{{ os.nome_cliente }}</td><td>{{ os.servico }}</td><td>{{ os.valor|brl }}</td>
+        <td><span class="badge {% if os.status == 'Concluída' %}badge-success{% elif os.status == 'Aberta' %}badge-info{% elif os.status == 'Em andamento' %}badge-warning{% else %}badge-danger{% endif %}">{{ os.status }}</span></td></tr>
+        {% empty %}<tr><td colspan="4"><div class="empty-state">Nenhuma OS ainda</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">🍩 Por tipo de serviço</div></div>
+    {% for svc in top_servicos %}
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%">{{ svc.servico }}</span>
+        <span style="color:#888780;font-weight:500;flex-shrink:0">{{ svc.total }}</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:{{ svc.total|pct:max_svc }}%"></div></div>
+    </div>
+    {% empty %}<div class="empty-state" style="padding:1rem">Sem dados</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

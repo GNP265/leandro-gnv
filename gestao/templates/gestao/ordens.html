@@ -1,0 +1,235 @@
+{% extends "gestao/base.html" %}
+{% load gestao_tags %}
+{% block title %}Ordens de Serviço — Leandro GNV{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Ordens de Serviço</div>
+  <button class="btn btn-primary" onclick="document.getElementById('modal-os').classList.add('open');document.getElementById('os-form').reset();document.getElementById('os_id').value='';">➕ Nova OS</button>
+</div>
+
+<div class="metrics-row" style="grid-template-columns:repeat(4,1fr)">
+  <div class="metric m-os"><div class="metric-label">OS este mês</div><div class="metric-val">{{ os_mes }}</div></div>
+  <div class="metric m-tot"><div class="metric-label">Total de OS</div><div class="metric-val">{{ total_os }}</div></div>
+  <div class="metric m-fat"><div class="metric-label">Faturamento mensal</div><div class="metric-val" style="font-size:15px">{{ fat_mes|brl }}</div></div>
+  <div class="metric {% if lucro_mes >= 0 %}m-lpos{% else %}m-lneg{% endif %}"><div class="metric-label">Lucro mensal</div><div class="metric-val" style="font-size:15px">{{ lucro_mes|brl }}</div></div>
+</div>
+
+<div class="tab-bar">
+  <a href="?tab=os&q={{ q }}&status={{ status_filter }}" class="tab {% if tab == 'os' %}active{% endif %}">📋 Ordens de Serviço</a>
+  <a href="?tab=clientes&q={{ q }}" class="tab {% if tab == 'clientes' %}active{% endif %}">👥 Clientes</a>
+</div>
+
+{% if tab == 'os' %}
+<form method="get" class="search-row">
+  <input type="hidden" name="tab" value="os">
+  <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome, placa, modelo, nº OS...">
+  <select name="status" onchange="this.form.submit()">
+    <option value="">Todos os status</option>
+    {% for key, label in status_choices %}<option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn">Buscar</button>
+</form>
+<div class="card" style="padding:0;overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th style="width:5%">#OS</th><th style="width:15%">Cliente</th><th style="width:9%">Placa</th>
+      <th style="width:10%">Modelo</th><th style="width:16%">Serviço</th>
+      <th style="width:8%">Data</th><th style="width:8%">KM</th>
+      <th style="width:9%">Valor</th><th style="width:9%">Lucro</th><th style="width:11%">Status</th>
+    </tr></thead>
+    <tbody>
+      {% for os in ordens_list %}
+      <tr class="clickable" onclick="viewOS({{ os.pk }})">
+        <td style="color:#888;font-size:11px">{{ os.pk }}</td>
+        <td>{{ os.nome_cliente }}</td><td style="font-weight:500">{{ os.placa }}</td>
+        <td>{{ os.modelo|default:"-" }}</td><td>{{ os.servico }}</td>
+        <td>{{ os.data|date:"d/m/Y" }}</td><td>{% if os.km %}{{ os.km|format_km }}{% else %}-{% endif %}</td>
+        <td>{{ os.valor|brl }}</td><td><span class="{{ os.lucro|lucro_class }}">{{ os.lucro|brl }}</span></td>
+        <td><span class="badge {% if os.status == 'Concluída' %}badge-success{% elif os.status == 'Aberta' %}badge-info{% elif os.status == 'Em andamento' %}badge-warning{% else %}badge-danger{% endif %}">{{ os.status }}</span></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="10"><div class="empty-state">Nenhuma ordem encontrada</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<!-- Tab: Clientes -->
+<form method="get" class="search-row">
+  <input type="hidden" name="tab" value="clientes">
+  <input type="text" name="q" value="{{ q }}" placeholder="Buscar cliente...">
+  <button type="submit" class="btn">Buscar</button>
+</form>
+{% for c in clientes %}
+<div class="card" style="margin-bottom:.5rem;display:flex;align-items:center;gap:12px;padding:.85rem 1.25rem">
+  <div class="avatar" style="width:36px;height:36px;background:#FAEEDA;color:#854F0B;font-size:13px">{{ c.nome_cliente|make_list|first }}{{ c.nome_cliente|make_list|last }}</div>
+  <div style="flex:1">
+    <div style="font-weight:500;font-size:14px">{{ c.nome_cliente }}</div>
+    <div style="font-size:12px;color:#888;margin-top:2px">{{ c.telefone|default:"Sem telefone" }}</div>
+  </div>
+  <div style="text-align:right;flex-shrink:0">
+    <div style="font-size:13px;font-weight:500">{{ c.total_valor|brl }}</div>
+    <div style="font-size:11px;color:#888">{{ c.total_os }} OS · última: {{ c.ultima|date:"d/m/Y" }}</div>
+  </div>
+</div>
+{% empty %}<div class="empty-state card">Nenhum cliente ainda</div>{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block modals %}
+<!-- Modal Nova/Editar OS -->
+<div class="modal-overlay" id="modal-os">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-os-title">Nova Ordem de Serviço</div>
+      <button class="btn" onclick="document.getElementById('modal-os').classList.remove('open')" style="padding:4px 8px;border:none">✕</button>
+    </div>
+    <form method="post" action="{% url 'os_save' %}" id="os-form">
+      {% csrf_token %}
+      <input type="hidden" name="os_id" id="os_id" value="">
+      <div class="form-grid">
+        <div class="section-sep">👤 Dados do cliente</div>
+        <div class="field"><label>Nome do cliente *</label><input name="nome_cliente" id="f-nome" required></div>
+        <div class="field"><label>Telefone</label><input name="telefone" id="f-tel"></div>
+        <div class="section-sep">🚗 Veículo</div>
+        <div class="field"><label>Marca</label><input name="marca" id="f-marca"></div>
+        <div class="field"><label>Modelo</label><input name="modelo" id="f-modelo"></div>
+        <div class="field"><label>Placa *</label><input name="placa" id="f-placa" required style="text-transform:uppercase"></div>
+        <div class="field"><label>KM do veículo</label><input name="km" id="f-km" type="number"></div>
+        <div class="section-sep">🔧 Serviço</div>
+        <div class="field form-full">
+          <label>Tipo de serviço *</label>
+          <select name="servico" id="f-servico" required onchange="document.getElementById('custom-row').style.display=this.value=='__outro__'?'block':'none'">
+            <option value="">Selecionar...</option>
+            <optgroup label="── 3ª Geração ──">{% for s in servicos_3g %}<option>{{ s }}</option>{% endfor %}</optgroup>
+            <optgroup label="── 5ª Geração ──">{% for s in servicos_5g %}<option>{{ s }}</option>{% endfor %}</optgroup>
+            <optgroup label="── Componentes ──">{% for s in servicos_comp %}<option>{{ s }}</option>{% endfor %}</optgroup>
+            <optgroup label="── Geral ──">{% for s in servicos_ger %}<option>{{ s }}</option>{% endfor %}</optgroup>
+            <optgroup label="── Outro ──"><option value="__outro__">Outro serviço (digitar)...</option></optgroup>
+          </select>
+        </div>
+        <div class="field form-full" id="custom-row" style="display:none"><label>Serviço personalizado</label><input name="servico_custom" id="f-servico-custom"></div>
+        <div class="field"><label>Colaborador</label>
+          <select name="colaborador" id="f-colab"><option value="">Selecionar...</option>{% for c in colaboradores %}<option value="{{ c.pk }}">{{ c.nome }}</option>{% endfor %}</select>
+        </div>
+        <div class="field"><label>Data do serviço *</label><input name="data" id="f-data" type="date" required></div>
+        <div class="field"><label>Garantia (dias)</label><input name="garantia_dias" id="f-garantia" type="number" value="90"></div>
+        <div class="field form-full"><label>Descrição</label><textarea name="descricao" id="f-descricao"></textarea></div>
+        <div class="section-sep">💰 Financeiro</div>
+        <div class="field"><label>Valor cobrado (R$)</label><input name="valor" id="f-valor" type="number" step="0.01" oninput="calcLucro()"></div>
+        <div class="field"><label>Custo de material (R$)</label><input name="material" id="f-material" type="number" step="0.01" oninput="calcLucro()"></div>
+        <div class="field"><label>Forma de pagamento</label>
+          <select name="pagamento" id="f-pagamento"><option value="">Selecionar...</option>{% for k,v in pagamento_choices %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+        </div>
+        <div class="field"><label>Comissão (R$)</label><input name="comissao" id="f-comissao" type="number" step="0.01" oninput="calcLucro()"></div>
+        <div class="field"><label>Lucro bruto estimado</label><input id="f-lucro" type="text" readonly style="font-weight:500"></div>
+        <div class="field"><label>Status</label>
+          <select name="status" id="f-status">{% for k,v in status_choices %}<option value="{{ k }}" {% if k == "Concluída" %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+        </div>
+        <div class="section-sep">✅ Checklist</div>
+        <div class="checklist-grid">
+          {% for item in checklist_items %}
+          <label class="checklist-item"><input type="checkbox" name="checklist" value="{{ item }}"> {{ item }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('modal-os').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Salvar OS</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Visualizar OS -->
+<div class="modal-overlay" id="modal-view">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="view-title">Ordem de Serviço</div>
+      <button class="btn" onclick="document.getElementById('modal-view').classList.remove('open')" style="padding:4px 8px;border:none">✕</button>
+    </div>
+    <div id="view-body"></div>
+    <div class="modal-footer">
+      <a id="btn-delete" href="#" class="btn btn-danger" onclick="return confirm('Excluir esta OS?')">🗑 Excluir</a>
+      <button class="btn" id="btn-edit" onclick="editOS()">✏️ Editar</button>
+      <button class="btn btn-dark" onclick="document.getElementById('modal-view').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcLucro(){
+  const v=parseFloat(document.getElementById('f-valor').value)||0;
+  const m=parseFloat(document.getElementById('f-material').value)||0;
+  const c=parseFloat(document.getElementById('f-comissao').value)||0;
+  const l=v-m-c;
+  const el=document.getElementById('f-lucro');
+  el.value='R$ '+l.toFixed(2);
+  el.style.color=l>=0?'#3B6D11':'#A32D2D';
+  el.style.background=l>=0?'#EAF3DE':'#FCEBEB';
+}
+
+let currentOS = null;
+
+function viewOS(id){
+  fetch('/ordens/'+id+'/json/').then(r=>r.json()).then(os=>{
+    currentOS = os;
+    document.getElementById('view-title').textContent='OS #'+os.id+' — '+os.nome_cliente;
+    document.getElementById('btn-delete').href='/ordens/'+os.id+'/excluir/';
+    const gv = os.garantia_vencimento ? new Date(os.garantia_vencimento+'T12:00').toLocaleDateString('pt-BR') : '-';
+    document.getElementById('view-body').innerHTML=`
+      <div class="detail-grid">
+        <div class="detail-row"><div class="detail-label">Cliente</div><div class="detail-val">${os.nome_cliente}</div></div>
+        <div class="detail-row"><div class="detail-label">Telefone</div><div class="detail-val">${os.telefone||'-'}</div></div>
+        <div class="detail-row"><div class="detail-label">Placa</div><div class="detail-val" style="font-weight:500">${os.placa}</div></div>
+        <div class="detail-row"><div class="detail-label">Modelo</div><div class="detail-val">${os.marca||'-'} ${os.modelo||''}</div></div>
+        <div class="detail-row"><div class="detail-label">KM</div><div class="detail-val">${os.km?Number(os.km).toLocaleString('pt-BR')+' km':'-'}</div></div>
+        <div class="detail-row"><div class="detail-label">Data</div><div class="detail-val">${new Date(os.data+'T12:00').toLocaleDateString('pt-BR')}</div></div>
+        <div class="detail-row"><div class="detail-label">Serviço</div><div class="detail-val">${os.servico}</div></div>
+        <div class="detail-row"><div class="detail-label">Colaborador</div><div class="detail-val">${os.colaborador_nome||'-'}</div></div>
+        <div class="detail-row"><div class="detail-label">Garantia até</div><div class="detail-val">${gv}</div></div>
+        <div class="detail-row"><div class="detail-label">Status</div><div class="detail-val">${os.status}</div></div>
+        <div class="detail-row"><div class="detail-label">Valor cobrado</div><div class="detail-val" style="font-weight:500">R$ ${parseFloat(os.valor).toFixed(2)}</div></div>
+        <div class="detail-row"><div class="detail-label">Lucro bruto</div><div class="detail-val ${parseFloat(os.lucro)>=0?'lpos':'lneg'}" style="font-size:16px">R$ ${parseFloat(os.lucro).toFixed(2)}</div></div>
+        <div class="detail-row" style="grid-column:1/-1"><div class="detail-label">Descrição</div><div class="detail-val" style="white-space:pre-wrap;margin-top:4px">${os.descricao||'-'}</div></div>
+      </div>`;
+    document.getElementById('modal-view').classList.add('open');
+  });
+}
+
+function editOS(){
+  if(!currentOS)return;
+  const os=currentOS;
+  document.getElementById('modal-view').classList.remove('open');
+  document.getElementById('os_id').value=os.id;
+  document.getElementById('modal-os-title').textContent='Editar OS #'+os.id;
+  document.getElementById('f-nome').value=os.nome_cliente;
+  document.getElementById('f-tel').value=os.telefone;
+  document.getElementById('f-marca').value=os.marca;
+  document.getElementById('f-modelo').value=os.modelo;
+  document.getElementById('f-placa').value=os.placa;
+  document.getElementById('f-km').value=os.km||'';
+  const sel=document.getElementById('f-servico');
+  const opt=[...sel.options].find(o=>o.value===os.servico);
+  if(opt){sel.value=os.servico;document.getElementById('custom-row').style.display='none';}
+  else{sel.value='__outro__';document.getElementById('f-servico-custom').value=os.servico;document.getElementById('custom-row').style.display='block';}
+  document.getElementById('f-colab').value=os.colaborador_id||'';
+  document.getElementById('f-data').value=os.data;
+  document.getElementById('f-garantia').value=os.garantia_dias;
+  document.getElementById('f-descricao').value=os.descricao;
+  document.getElementById('f-valor').value=os.valor;
+  document.getElementById('f-material').value=os.material;
+  document.getElementById('f-comissao').value=os.comissao;
+  document.getElementById('f-pagamento').value=os.pagamento;
+  document.getElementById('f-status').value=os.status;
+  document.querySelectorAll('input[name=checklist]').forEach(cb=>{cb.checked=os.checklist.includes(cb.value)});
+  calcLucro();
+  document.getElementById('modal-os').classList.add('open');
+}
+
+document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}
