@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Max
 from django.utils import timezone
 from datetime import timedelta, date
 from decimal import Decimal
@@ -142,7 +142,7 @@ def ordens(request):
 
     # Clientes agregados
     clientes = (OrdemServico.objects.values('nome_cliente','telefone')
-                .annotate(total_os=Count('id'), total_valor=Sum('valor'), ultima=models.Max('data'))
+                .annotate(total_os=Count('id'), total_valor=Sum('valor'), ultima=Max('data'))
                 .order_by('-ultima'))
     if q and tab == 'clientes':
         clientes = clientes.filter(nome_cliente__icontains=q)
