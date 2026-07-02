@@ -6,7 +6,7 @@ django.setup()
 
 try:
     from django.core.management import call_command
-    call_command('migrate', verbosity=0)
+    call_command('migrate', '--run-syncdb', verbosity=0)
 
     from django.contrib.auth.models import User
     from gestao.models import Colaborador
