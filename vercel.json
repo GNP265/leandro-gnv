@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "buildCommand": "bash build_files.sh",
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "20mb" }
+    },
+    {
+      "src": "gestao/static/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/static/(.*)", "dest": "gestao/static/$1" },
+    { "src": "/(.*)", "dest": "api/index.py" }
+  ]
+}
