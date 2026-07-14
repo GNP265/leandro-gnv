@@ -36,8 +36,8 @@ class OrdemServico(models.Model):
     placa = models.CharField(max_length=10)
     km = models.PositiveIntegerField('KM do veículo', null=True, blank=True)
 
-    # Serviço
-    servico = models.CharField('Tipo de serviço', max_length=200)
+    # Serviço (um ou mais, separados por ' + ')
+    servico = models.TextField('Serviços realizados')
     colaborador = models.ForeignKey(Colaborador, on_delete=models.SET_NULL, null=True, blank=True)
     data = models.DateField('Data do serviço')
     garantia_dias = models.PositiveIntegerField('Garantia (dias)', default=90)
@@ -76,3 +76,44 @@ class OrdemServico(models.Model):
         if self.data and self.garantia_dias:
             return self.data + timedelta(days=self.garantia_dias)
         return None
+
+    @property
+    def servicos_lista(self):
+        return [s.strip() for s in self.servico.split(' + ') if s.strip()]
+
+
+class ContaPagar(models.Model):
+    CATEGORIA_CHOICES = [
+        ('Salário', 'Salário'), ('Boleto', 'Boleto'), ('Dívida', 'Dívida'),
+        ('Imposto', 'Imposto'), ('Fornecedor', 'Fornecedor'), ('Aluguel', 'Aluguel'),
+        ('Água/Luz/Internet', 'Água/Luz/Internet'), ('Outros', 'Outros'),
+    ]
+
+    RECORRENCIA_CHOICES = [
+        ('', 'Única (sem repetição)'), ('Diária', 'Diária'),
+        ('Semanal', 'Semanal'), ('Mensal', 'Mensal'),
+    ]
+
+    descricao = models.CharField('Descrição', max_length=200)
+    categoria = models.CharField(max_length=30, choices=CATEGORIA_CHOICES, default='Boleto')
+    valor = models.DecimalField('Valor (R$)', max_digits=10, decimal_places=2, default=0)
+    vencimento = models.DateField('Data de vencimento')
+    pago = models.BooleanField('Pago', default=False)
+    observacao = models.TextField('Observação', blank=True, default='')
+    # Recorrência: cada vencimento vira uma conta própria; 'grupo' liga a série
+    recorrencia = models.CharField(max_length=10, choices=RECORRENCIA_CHOICES, blank=True, default='')
+    grupo = models.CharField(max_length=16, blank=True, default='', db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['vencimento', 'id']
+        verbose_name = 'Conta a Pagar'
+        verbose_name_plural = 'Contas a Pagar'
+
+    def __str__(self):
+        return f'{self.descricao} — R$ {self.valor} (vence {self.vencimento})'
+
+    @property
+    def vencida(self):
+        from datetime import date
+        return not self.pago and self.vencimento < date.today()

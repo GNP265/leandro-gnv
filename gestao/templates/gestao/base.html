@@ -24,6 +24,7 @@
       <div class="nav-section">Menu</div>
       <a href="{% url 'dashboard' %}" class="nav-item {% if page == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
       <a href="{% url 'ordens' %}" class="nav-item {% if page == 'ordens' %}active{% endif %}">📋 Ordens de Serviço</a>
+      <a href="{% url 'contas' %}" class="nav-item {% if page == 'contas' %}active{% endif %}">💸 Contas a Pagar</a>
       <div class="nav-section">Relatórios</div>
       <a href="{% url 'financeiro' %}" class="nav-item {% if page == 'financeiro' %}active{% endif %}">📈 Financeiro</a>
       <a href="{% url 'colaboradores' %}" class="nav-item {% if page == 'colaboradores' %}active{% endif %}">👥 Colaboradores</a>

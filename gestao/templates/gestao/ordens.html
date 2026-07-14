@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <div class="page-title">Ordens de Serviço</div>
-  <button class="btn btn-primary" onclick="document.getElementById('modal-os').classList.add('open');document.getElementById('os-form').reset();document.getElementById('os_id').value='';">➕ Nova OS</button>
+  <button class="btn btn-primary" onclick="newOS()">➕ Nova OS</button>
 </div>
 
 <div class="metrics-row" style="grid-template-columns:repeat(4,1fr)">
@@ -78,6 +78,24 @@
 {% endblock %}
 
 {% block modals %}
+<!-- Modelo de linha de serviço (clonado pelo JavaScript) -->
+<template id="servico-row-tpl">
+  <div class="servico-row">
+    <div class="servico-row-main">
+      <select name="servico" required onchange="toggleCustom(this)">
+        <option value="">Selecionar...</option>
+        <optgroup label="── 3ª Geração ──">{% for s in servicos_3g %}<option>{{ s }}</option>{% endfor %}</optgroup>
+        <optgroup label="── 5ª Geração ──">{% for s in servicos_5g %}<option>{{ s }}</option>{% endfor %}</optgroup>
+        <optgroup label="── Componentes ──">{% for s in servicos_comp %}<option>{{ s }}</option>{% endfor %}</optgroup>
+        <optgroup label="── Geral ──">{% for s in servicos_ger %}<option>{{ s }}</option>{% endfor %}</optgroup>
+        <optgroup label="── Outro ──"><option value="__outro__">Outro serviço (digitar)...</option></optgroup>
+      </select>
+      <button type="button" class="btn btn-danger btn-remove-servico" onclick="removeServicoRow(this)" title="Remover este serviço">✕</button>
+    </div>
+    <input name="servico_custom" placeholder="Digite o serviço..." style="display:none">
+  </div>
+</template>
+
 <!-- Modal Nova/Editar OS -->
 <div class="modal-overlay" id="modal-os">
   <div class="modal">
@@ -97,19 +115,11 @@
         <div class="field"><label>Modelo</label><input name="modelo" id="f-modelo"></div>
         <div class="field"><label>Placa *</label><input name="placa" id="f-placa" required style="text-transform:uppercase"></div>
         <div class="field"><label>KM do veículo</label><input name="km" id="f-km" type="number"></div>
-        <div class="section-sep">🔧 Serviço</div>
-        <div class="field form-full">
-          <label>Tipo de serviço *</label>
-          <select name="servico" id="f-servico" required onchange="document.getElementById('custom-row').style.display=this.value=='__outro__'?'block':'none'">
-            <option value="">Selecionar...</option>
-            <optgroup label="── 3ª Geração ──">{% for s in servicos_3g %}<option>{{ s }}</option>{% endfor %}</optgroup>
-            <optgroup label="── 5ª Geração ──">{% for s in servicos_5g %}<option>{{ s }}</option>{% endfor %}</optgroup>
-            <optgroup label="── Componentes ──">{% for s in servicos_comp %}<option>{{ s }}</option>{% endfor %}</optgroup>
-            <optgroup label="── Geral ──">{% for s in servicos_ger %}<option>{{ s }}</option>{% endfor %}</optgroup>
-            <optgroup label="── Outro ──"><option value="__outro__">Outro serviço (digitar)...</option></optgroup>
-          </select>
+        <div class="section-sep">🔧 Serviços realizados</div>
+        <div class="form-full" id="servicos-container"></div>
+        <div class="form-full">
+          <button type="button" class="btn" onclick="addServicoRow()">➕ Adicionar outro serviço</button>
         </div>
-        <div class="field form-full" id="custom-row" style="display:none"><label>Serviço personalizado</label><input name="servico_custom" id="f-servico-custom"></div>
         <div class="field"><label>Colaborador</label>
           <select name="colaborador" id="f-colab"><option value="">Selecionar...</option>{% for c in colaboradores %}<option value="{{ c.pk }}">{{ c.nome }}</option>{% endfor %}</select>
         </div>
@@ -161,6 +171,54 @@
 
 {% block scripts %}
 <script>
+// --- Múltiplos serviços ---
+function toggleCustom(sel){
+  const row=sel.closest('.servico-row');
+  const inp=row.querySelector('input[name=servico_custom]');
+  const outro=sel.value==='__outro__';
+  inp.style.display=outro?'block':'none';
+  inp.required=outro;
+  if(!outro)inp.value='';
+}
+function addServicoRow(valor){
+  const tpl=document.getElementById('servico-row-tpl');
+  const node=tpl.content.firstElementChild.cloneNode(true);
+  document.getElementById('servicos-container').appendChild(node);
+  const sel=node.querySelector('select');
+  if(valor){
+    const opt=[...sel.options].find(o=>o.value===valor);
+    if(opt){sel.value=valor;}
+    else{sel.value='__outro__';node.querySelector('input[name=servico_custom]').value=valor;}
+  }
+  toggleCustom(sel);
+  updateRemoveButtons();
+  return node;
+}
+function removeServicoRow(btn){
+  if(document.querySelectorAll('#servicos-container .servico-row').length<=1)return;
+  btn.closest('.servico-row').remove();
+  updateRemoveButtons();
+}
+function updateRemoveButtons(){
+  const rows=document.querySelectorAll('#servicos-container .servico-row');
+  rows.forEach(r=>{r.querySelector('.btn-remove-servico').style.visibility=rows.length>1?'visible':'hidden';});
+}
+function setServicos(str){
+  document.getElementById('servicos-container').innerHTML='';
+  const lista=(str||'').split(' + ').map(s=>s.trim()).filter(Boolean);
+  if(lista.length===0){addServicoRow();return;}
+  lista.forEach(s=>addServicoRow(s));
+}
+
+function newOS(){
+  document.getElementById('os-form').reset();
+  document.getElementById('os_id').value='';
+  document.getElementById('modal-os-title').textContent='Nova Ordem de Serviço';
+  setServicos('');
+  document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('modal-os').classList.add('open');
+}
+
 function calcLucro(){
   const v=parseFloat(document.getElementById('f-valor').value)||0;
   const m=parseFloat(document.getElementById('f-material').value)||0;
@@ -188,7 +246,7 @@ function viewOS(id){
         <div class="detail-row"><div class="detail-label">Modelo</div><div class="detail-val">${os.marca||'-'} ${os.modelo||''}</div></div>
         <div class="detail-row"><div class="detail-label">KM</div><div class="detail-val">${os.km?Number(os.km).toLocaleString('pt-BR')+' km':'-'}</div></div>
         <div class="detail-row"><div class="detail-label">Data</div><div class="detail-val">${new Date(os.data+'T12:00').toLocaleDateString('pt-BR')}</div></div>
-        <div class="detail-row"><div class="detail-label">Serviço</div><div class="detail-val">${os.servico}</div></div>
+        <div class="detail-row"><div class="detail-label">Serviços</div><div class="detail-val">${os.servico.split(' + ').map(s=>'• '+s).join('<br>')}</div></div>
         <div class="detail-row"><div class="detail-label">Colaborador</div><div class="detail-val">${os.colaborador_nome||'-'}</div></div>
         <div class="detail-row"><div class="detail-label">Garantia até</div><div class="detail-val">${gv}</div></div>
         <div class="detail-row"><div class="detail-label">Status</div><div class="detail-val">${os.status}</div></div>
@@ -212,10 +270,7 @@ function editOS(){
   document.getElementById('f-modelo').value=os.modelo;
   document.getElementById('f-placa').value=os.placa;
   document.getElementById('f-km').value=os.km||'';
-  const sel=document.getElementById('f-servico');
-  const opt=[...sel.options].find(o=>o.value===os.servico);
-  if(opt){sel.value=os.servico;document.getElementById('custom-row').style.display='none';}
-  else{sel.value='__outro__';document.getElementById('f-servico-custom').value=os.servico;document.getElementById('custom-row').style.display='block';}
+  setServicos(os.servico);
   document.getElementById('f-colab').value=os.colaborador_id||'';
   document.getElementById('f-data').value=os.data;
   document.getElementById('f-garantia').value=os.garantia_dias;
@@ -231,5 +286,6 @@ function editOS(){
 }
 
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+setServicos('');
 </script>
 {% endblock %}

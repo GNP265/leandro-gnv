@@ -6,7 +6,9 @@ django.setup()
 
 try:
     from django.core.management import call_command
-    call_command('migrate', '--run-syncdb', verbosity=0)
+    # --fake-initial: as tabelas originais já existem no banco (criadas via syncdb);
+    # marca a migração 0001 como aplicada e executa apenas as novas (0002+)
+    call_command('migrate', '--fake-initial', verbosity=0)
 
     from django.contrib.auth.models import User
     from gestao.models import Colaborador

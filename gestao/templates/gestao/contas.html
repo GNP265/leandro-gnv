@@ -1,0 +1,200 @@
+{% extends "gestao/base.html" %}
+{% load gestao_tags %}
+{% block title %}Contas a Pagar — Leandro GNV{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Contas a Pagar</div>
+  <button class="btn btn-primary" onclick="novaConta()">➕ Nova Conta</button>
+</div>
+
+<div class="metrics-row" style="grid-template-columns:repeat(4,1fr)">
+  <div class="metric m-mat"><div class="metric-label">Total do mês</div><div class="metric-val" style="font-size:16px">{{ total_mes|brl }}</div></div>
+  <div class="metric m-os"><div class="metric-label">Em aberto</div><div class="metric-val" style="font-size:16px">{{ total_aberto|brl }}</div></div>
+  <div class="metric m-lpos"><div class="metric-label">Pagas no mês</div><div class="metric-val" style="font-size:16px">{{ total_pago|brl }}</div></div>
+  <div class="metric {% if vencidas > 0 %}m-lneg{% else %}m-tot{% endif %}"><div class="metric-label">Contas vencidas</div><div class="metric-val">{{ vencidas }}</div></div>
+</div>
+
+<!-- Calendário -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📅 Calendário de vencimentos</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="?ano={{ prev_ano }}&mes={{ prev_mes }}" class="btn" style="padding:4px 10px">◀</a>
+      <span style="font-size:14px;font-weight:500;min-width:140px;text-align:center">{{ mes_label }}</span>
+      <a href="?ano={{ next_ano }}&mes={{ next_mes }}" class="btn" style="padding:4px 10px">▶</a>
+    </div>
+  </div>
+  <div class="cal-grid cal-head">
+    <div class="cal-dow">Dom</div><div class="cal-dow">Seg</div><div class="cal-dow">Ter</div>
+    <div class="cal-dow">Qua</div><div class="cal-dow">Qui</div><div class="cal-dow">Sex</div><div class="cal-dow">Sáb</div>
+  </div>
+  {% for semana in semanas %}
+  <div class="cal-grid">
+    {% for d in semana %}
+    <div class="cal-day {% if not d.no_mes %}cal-other{% endif %} {% if d.hoje %}cal-today{% endif %}">
+      <div class="cal-num">{{ d.dia.day }}</div>
+      {% for c in d.contas %}
+      <div class="cal-event {% if c.pago %}ce-paga{% elif c.vencida %}ce-vencida{% else %}ce-aberta{% endif %}"
+           onclick="editarConta({{ c.pk }})" title="{{ c.descricao }} — {{ c.valor|brl }} ({{ c.categoria }}){% if c.pago %} · PAGA{% elif c.vencida %} · VENCIDA{% endif %}">
+        <span class="ce-valor">{{ c.valor|brl }}</span> {{ c.descricao }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  <div class="cal-legend">
+    <span><span class="cal-dot" style="background:#EAF3DE;border-color:#C0DD97"></span> Paga</span>
+    <span><span class="cal-dot" style="background:#FAEEDA;border-color:#FAC775"></span> Em aberto</span>
+    <span><span class="cal-dot" style="background:#FCEBEB;border-color:#F7C1C1"></span> Vencida</span>
+  </div>
+</div>
+
+<!-- Lista do mês -->
+<div class="card" style="padding:0;overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th style="width:24%">Descrição</th><th style="width:13%">Categoria</th>
+      <th style="width:12%">Valor</th><th style="width:12%">Vencimento</th>
+      <th style="width:12%">Situação</th><th style="width:27%">Ações</th>
+    </tr></thead>
+    <tbody>
+      {% for c in contas_mes %}
+      <tr>
+        <td>{{ c.descricao }}{% if c.grupo %} <span class="badge badge-info" style="font-size:10px" title="Conta recorrente ({{ c.recorrencia|lower }})">🔁 {{ c.recorrencia }}</span>{% endif %}</td>
+        <td><span class="badge badge-gray">{{ c.categoria }}</span></td>
+        <td style="font-weight:500">{{ c.valor|brl }}</td>
+        <td>{{ c.vencimento|date:"d/m/Y" }}</td>
+        <td>
+          {% if c.pago %}<span class="badge badge-success">Paga</span>
+          {% elif c.vencida %}<span class="badge badge-danger">Vencida</span>
+          {% else %}<span class="badge badge-warning">Em aberto</span>{% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          <a href="{% url 'conta_toggle_pago' c.pk %}" class="btn" style="padding:3px 9px;font-size:12px">{% if c.pago %}↩ Reabrir{% else %}✔ Marcar paga{% endif %}</a>
+          <button class="btn" style="padding:3px 9px;font-size:12px" onclick="editarConta({{ c.pk }})">✏️ Editar</button>
+          <a href="{% url 'conta_delete' c.pk %}" class="btn btn-danger" style="padding:3px 9px;font-size:12px" title="Excluir só esta conta" onclick="return confirm('Excluir esta conta?')">🗑</a>
+          {% if c.grupo %}<a href="{% url 'conta_delete' c.pk %}?serie=1" class="btn btn-danger" style="padding:3px 9px;font-size:12px" title="Excluir todas as contas desta recorrência" onclick="return confirm('Excluir TODA a série recorrente ({{ c.recorrencia|lower }})? Todas as contas ligadas a ela serão removidas.')">🗑 Série</a>{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6"><div class="empty-state">Nenhuma conta cadastrada neste mês.<br>Clique em "➕ Nova Conta" para começar.</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="modal-conta">
+  <div class="modal modal-sm" style="width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-conta-title">Nova Conta a Pagar</div>
+      <button class="btn" onclick="document.getElementById('modal-conta').classList.remove('open')" style="padding:4px 8px;border:none">✕</button>
+    </div>
+    <form method="post" action="{% url 'conta_save' %}" id="conta-form">
+      {% csrf_token %}
+      <input type="hidden" name="conta_id" id="conta_id" value="">
+      <div class="form-grid">
+        <div class="field form-full"><label>Descrição *</label><input name="descricao" id="c-descricao" required placeholder="Ex: Salário do João, Boleto fornecedor..."></div>
+        <div class="field"><label>Categoria</label>
+          <select name="categoria" id="c-categoria">{% for k,v in categoria_choices %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+        </div>
+        <div class="field"><label>Valor (R$) *</label><input name="valor" id="c-valor" type="number" step="0.01" min="0" required></div>
+        <div class="field"><label>Data de vencimento *</label><input name="vencimento" id="c-vencimento" type="date" required></div>
+        <div class="field" style="justify-content:flex-end">
+          <label class="checklist-item" style="padding:8px 10px;border:1px solid #D3D1C7;border-radius:8px">
+            <input type="checkbox" name="pago" id="c-pago"> Já está paga
+          </label>
+        </div>
+        <div class="section-sep" id="sec-recorrencia">🔁 Repetição</div>
+        <div class="field" id="row-recorrencia">
+          <label>Essa conta se repete?</label>
+          <select name="recorrencia" id="c-recorrencia" onchange="atualizaRecorrencia()">
+            <option value="">Não, é uma conta única</option>
+            <option value="Diária">Sim, todo dia (diária)</option>
+            <option value="Semanal">Sim, uma vez por semana (mesmo dia da semana)</option>
+            <option value="Mensal">Sim, uma vez por mês (mesmo dia do mês)</option>
+          </select>
+        </div>
+        <div class="field" id="row-duracao" style="display:none">
+          <label>Até quando?</label>
+          <select name="duracao" id="c-duracao" onchange="atualizaRecorrencia()">
+            <option value="recorrente">Recorrente (sem prazo final)</option>
+            <option value="prazo">Tem prazo final (escolher última data)</option>
+          </select>
+        </div>
+        <div class="field form-full" id="row-prazo" style="display:none">
+          <label>Última data (prazo final) *</label>
+          <input name="prazo_final" id="c-prazo" type="date">
+        </div>
+        <div class="form-full" id="rec-hint" style="display:none;font-size:11px;color:#854F0B;background:#FAEEDA;border:1px solid #FAC775;border-radius:8px;padding:8px 10px"></div>
+        <div class="field form-full"><label>Observação</label><textarea name="observacao" id="c-observacao" style="min-height:50px"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('modal-conta').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Salvar Conta</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function atualizaRecorrencia(){
+  const rec=document.getElementById('c-recorrencia').value;
+  const dur=document.getElementById('c-duracao').value;
+  const temRec=rec!=='';
+  document.getElementById('row-duracao').style.display=temRec?'flex':'none';
+  const comPrazo=temRec&&dur==='prazo';
+  document.getElementById('row-prazo').style.display=comPrazo?'flex':'none';
+  document.getElementById('c-prazo').required=comPrazo;
+  const hint=document.getElementById('rec-hint');
+  if(temRec&&dur==='recorrente'){
+    const horizonte={'Diária':'os próximos 60 dias','Semanal':'as próximas 26 semanas','Mensal':'os próximos 12 meses'}[rec];
+    hint.textContent='💡 Sem prazo final: vamos criar automaticamente uma conta para cada vencimento em '+horizonte+'. Você pode excluir a série inteira depois, se precisar.';
+    hint.style.display='block';
+  }else if(comPrazo){
+    hint.textContent='💡 Será criada uma conta para cada vencimento, da data inicial até a última data.';
+    hint.style.display='block';
+  }else{
+    hint.style.display='none';
+  }
+}
+function mostraRecorrencia(mostrar){
+  ['sec-recorrencia','row-recorrencia'].forEach(id=>document.getElementById(id).style.display=mostrar?'':'none');
+  if(!mostrar){
+    document.getElementById('row-duracao').style.display='none';
+    document.getElementById('row-prazo').style.display='none';
+    document.getElementById('rec-hint').style.display='none';
+    document.getElementById('c-prazo').required=false;
+  }
+}
+function novaConta(){
+  document.getElementById('conta-form').reset();
+  document.getElementById('conta_id').value='';
+  document.getElementById('modal-conta-title').textContent='Nova Conta a Pagar';
+  const d=new Date({{ ano }}, {{ mes }}-1, Math.min(new Date().getDate(),28));
+  document.getElementById('c-vencimento').value=d.toISOString().split('T')[0];
+  mostraRecorrencia(true);
+  atualizaRecorrencia();
+  document.getElementById('modal-conta').classList.add('open');
+}
+function editarConta(id){
+  fetch('/contas/'+id+'/json/').then(r=>r.json()).then(c=>{
+    document.getElementById('conta_id').value=c.id;
+    document.getElementById('modal-conta-title').textContent='Editar Conta';
+    document.getElementById('c-descricao').value=c.descricao;
+    document.getElementById('c-categoria').value=c.categoria;
+    document.getElementById('c-valor').value=c.valor;
+    document.getElementById('c-vencimento').value=c.vencimento;
+    document.getElementById('c-pago').checked=c.pago;
+    document.getElementById('c-observacao').value=c.observacao;
+    document.getElementById('c-recorrencia').value='';
+    mostraRecorrencia(false); // edição altera só esta conta, não a série
+    document.getElementById('modal-conta').classList.add('open');
+  });
+}
+</script>
+{% endblock %}

@@ -7,8 +7,9 @@ from django.db.models import Sum, Count, Q, Max
 from django.utils import timezone
 from datetime import timedelta, date
 from decimal import Decimal
-import csv, json
-from .models import OrdemServico, Colaborador
+from collections import Counter
+import csv, json, calendar as cal
+from .models import OrdemServico, Colaborador, ContaPagar
 
 SERVICOS_3G = [
     'Regulagem de kit 3ª geração','Pacote limpeza do sistema GNV – 3ª geração',
@@ -107,9 +108,14 @@ def dashboard(request):
     m = _metrics(os_mes)
 
     recentes = OrdemServico.objects.all()[:6]
-    # Serviços mais frequentes
-    top_servicos = (OrdemServico.objects.values('servico')
-                    .annotate(total=Count('id')).order_by('-total')[:6])
+    # Serviços mais frequentes (cada serviço da OS conta separadamente)
+    cnt = Counter()
+    for sv in OrdemServico.objects.values_list('servico', flat=True):
+        for parte in sv.split(' + '):
+            parte = parte.strip()
+            if parte:
+                cnt[parte] += 1
+    top_servicos = [{'servico': s, 'total': t} for s, t in cnt.most_common(6)]
     max_svc = top_servicos[0]['total'] if top_servicos else 1
 
     ctx = {
@@ -176,10 +182,17 @@ def os_save(request):
     km = request.POST.get('km', '')
     os.km = int(km) if km else None
 
-    servico = request.POST.get('servico', '')
-    if servico == '__outro__':
-        servico = request.POST.get('servico_custom', '').strip()
-    os.servico = servico
+    # Múltiplos serviços: cada linha do formulário envia um par (servico, servico_custom)
+    servicos = request.POST.getlist('servico')
+    customs = request.POST.getlist('servico_custom')
+    lista = []
+    for i, sv in enumerate(servicos):
+        if sv == '__outro__':
+            sv = customs[i].strip() if i < len(customs) else ''
+        sv = sv.strip()
+        if sv and sv not in lista:
+            lista.append(sv)
+    os.servico = ' + '.join(lista)
 
     colab_id = request.POST.get('colaborador', '')
     os.colaborador = Colaborador.objects.get(pk=colab_id) if colab_id else None
@@ -229,12 +242,115 @@ def os_detail_json(request, pk):
 
 
 # --- Financeiro ---
+def _serie_evolucao():
+    """Séries diária (30 dias), semanal (12 semanas) e mensal (12 meses)
+    de faturamento, custos (material+comissão) e lucro bruto."""
+    hoje = date.today()
+    inicio = date(hoje.year - 1, hoje.month, 1)
+    registros = (OrdemServico.objects.filter(data__gte=inicio)
+                 .values_list('data', 'valor', 'material', 'comissao'))
+
+    dia = {}
+    for d, v, mt, cm in registros:
+        v, mt, cm = float(v or 0), float(mt or 0), float(cm or 0)
+        b = dia.setdefault(d, [0.0, 0.0])
+        b[0] += v
+        b[1] += mt + cm
+
+    def ponto(fat, custo):
+        return round(fat, 2), round(custo, 2), round(fat - custo, 2)
+
+    # Diário — últimos 30 dias
+    diario = {'labels': [], 'fat': [], 'custo': [], 'lucro': []}
+    for i in range(29, -1, -1):
+        d = hoje - timedelta(days=i)
+        fat, custo = dia.get(d, [0.0, 0.0])
+        f, c, l = ponto(fat, custo)
+        diario['labels'].append(d.strftime('%d/%m'))
+        diario['fat'].append(f); diario['custo'].append(c); diario['lucro'].append(l)
+
+    # Semanal — últimas 12 semanas (segunda a domingo)
+    semanal = {'labels': [], 'fat': [], 'custo': [], 'lucro': []}
+    seg_atual = hoje - timedelta(days=hoje.weekday())
+    for i in range(11, -1, -1):
+        ini = seg_atual - timedelta(weeks=i)
+        fim = ini + timedelta(days=6)
+        fat = custo = 0.0
+        for d, b in dia.items():
+            if ini <= d <= fim:
+                fat += b[0]; custo += b[1]
+        f, c, l = ponto(fat, custo)
+        semanal['labels'].append(ini.strftime('%d/%m'))
+        semanal['fat'].append(f); semanal['custo'].append(c); semanal['lucro'].append(l)
+
+    # Mensal — últimos 12 meses
+    MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    mensal = {'labels': [], 'fat': [], 'custo': [], 'lucro': []}
+    ano, mes = hoje.year, hoje.month
+    chaves = []
+    for _ in range(12):
+        chaves.append((ano, mes))
+        mes -= 1
+        if mes == 0:
+            mes = 12; ano -= 1
+    for a, m in reversed(chaves):
+        fat = custo = 0.0
+        for d, b in dia.items():
+            if d.year == a and d.month == m:
+                fat += b[0]; custo += b[1]
+        f, c, l = ponto(fat, custo)
+        mensal['labels'].append(f'{MESES[m-1]}/{str(a)[2:]}')
+        mensal['fat'].append(f); mensal['custo'].append(c); mensal['lucro'].append(l)
+
+    return {'diario': diario, 'semanal': semanal, 'mensal': mensal}
+
+def _rank_servicos():
+    """Ranking de serviços (top 5 por lucro e por quantidade), total e por mês.
+    Em OS com vários serviços, o lucro é dividido igualmente entre eles."""
+    MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+             'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    hoje = date.today()
+    inicio = date(hoje.year - 1, hoje.month, 1)
+
+    lucro_tot, qtd_tot = Counter(), Counter()
+    lucro_mes, qtd_mes = {}, {}
+    for os_data, valor, material, comissao, servico in (
+            OrdemServico.objects.filter(data__gte=inicio)
+            .values_list('data', 'valor', 'material', 'comissao', 'servico')):
+        partes = [s.strip() for s in servico.split(' + ') if s.strip()]
+        if not partes:
+            continue
+        lucro_por_servico = float((valor or 0) - (material or 0) - (comissao or 0)) / len(partes)
+        chave = f'{os_data.year}-{os_data.month:02d}'
+        lm = lucro_mes.setdefault(chave, Counter())
+        qm = qtd_mes.setdefault(chave, Counter())
+        for p in partes:
+            lucro_tot[p] += lucro_por_servico
+            qtd_tot[p] += 1
+            lm[p] += lucro_por_servico
+            qm[p] += 1
+
+    def top5(cnt, arredonda=False):
+        return [[nome, round(v, 2) if arredonda else v] for nome, v in cnt.most_common(5)]
+
+    dados = {'todos': {'lucro': top5(lucro_tot, True), 'qtd': top5(qtd_tot)}}
+    meses_opcoes = [['todos', 'Últimos 12 meses']]
+    for chave in sorted(lucro_mes.keys(), reverse=True):
+        a, m = chave.split('-')
+        meses_opcoes.append([chave, f'{MESES[int(m)-1]}/{a}'])
+        dados[chave] = {'lucro': top5(lucro_mes[chave], True), 'qtd': top5(qtd_mes[chave])}
+    return {'meses': meses_opcoes, 'dados': dados}
+
 @login_required
 def financeiro(request):
     periodo = request.GET.get('periodo', 'mes')
     qs = _periodo_filter(OrdemServico.objects.all(), periodo)
     m = _metrics(qs)
-    ctx = {'ordens_list': qs, **m, 'periodo': periodo, 'page': 'financeiro'}
+    ctx = {
+        'ordens_list': qs, **m, 'periodo': periodo, 'page': 'financeiro',
+        'chart_data': _serie_evolucao(),
+        'rank_data': _rank_servicos(),
+    }
     return render(request, 'gestao/financeiro.html', ctx)
 
 
@@ -273,6 +389,154 @@ def colab_remove(request, pk):
     c.save()
     messages.success(request, f'{c.nome} removido.')
     return redirect('colaboradores')
+
+
+# --- Contas a Pagar ---
+@login_required
+def contas(request):
+    hoje = date.today()
+    try:
+        ano = int(request.GET.get('ano', hoje.year))
+        mes = int(request.GET.get('mes', hoje.month))
+        date(ano, mes, 1)
+    except (ValueError, TypeError):
+        ano, mes = hoje.year, hoje.month
+
+    # Navegação de meses
+    prev_ano, prev_mes = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
+    next_ano, next_mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+
+    contas_mes = ContaPagar.objects.filter(vencimento__year=ano, vencimento__month=mes)
+    agg = contas_mes.aggregate(total=Sum('valor'))
+    total_mes = agg['total'] or Decimal('0')
+    pagas = contas_mes.filter(pago=True)
+    abertas = contas_mes.filter(pago=False)
+    total_pago = pagas.aggregate(t=Sum('valor'))['t'] or Decimal('0')
+    total_aberto = abertas.aggregate(t=Sum('valor'))['t'] or Decimal('0')
+    vencidas = ContaPagar.objects.filter(pago=False, vencimento__lt=hoje).count()
+
+    # Calendário: semanas do mês (domingo a sábado), com as contas de cada dia
+    contas_por_dia = {}
+    grade = cal.Calendar(firstweekday=6).monthdatescalendar(ano, mes)
+    datas_visiveis = [d for semana in grade for d in semana]
+    for c in ContaPagar.objects.filter(vencimento__gte=datas_visiveis[0], vencimento__lte=datas_visiveis[-1]):
+        contas_por_dia.setdefault(c.vencimento, []).append(c)
+    semanas = [[{'dia': d, 'no_mes': d.month == mes, 'hoje': d == hoje,
+                 'contas': contas_por_dia.get(d, [])} for d in semana] for semana in grade]
+
+    MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+             'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
+    ctx = {
+        'semanas': semanas, 'contas_mes': contas_mes,
+        'mes_label': f'{MESES[mes-1]} de {ano}',
+        'prev_ano': prev_ano, 'prev_mes': prev_mes,
+        'next_ano': next_ano, 'next_mes': next_mes,
+        'ano': ano, 'mes': mes,
+        'total_mes': total_mes, 'total_pago': total_pago,
+        'total_aberto': total_aberto, 'vencidas': vencidas,
+        'categoria_choices': ContaPagar.CATEGORIA_CHOICES,
+        'page': 'contas',
+    }
+    return render(request, 'gestao/contas.html', ctx)
+
+def _proximo_mes(d):
+    """Mesmo dia no mês seguinte (ajustando para meses mais curtos, ex: dia 31)."""
+    ano, mes = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
+    ultimo_dia = cal.monthrange(ano, mes)[1]
+    return date(ano, mes, min(d.day, ultimo_dia))
+
+def _datas_recorrencia(inicio, recorrencia, prazo_final):
+    """Lista de vencimentos da série. Sem prazo final, gera um horizonte padrão:
+    diária = 60 dias, semanal = 26 semanas, mensal = 12 meses. Limite: 120 contas."""
+    if prazo_final:
+        fim = prazo_final
+    elif recorrencia == 'Diária':
+        fim = inicio + timedelta(days=59)
+    elif recorrencia == 'Semanal':
+        fim = inicio + timedelta(weeks=25)
+    else:  # Mensal
+        fim = inicio
+        for _ in range(11):
+            fim = _proximo_mes(fim)
+    datas, d = [], inicio
+    while d <= fim and len(datas) < 120:
+        datas.append(d)
+        if recorrencia == 'Diária':
+            d = d + timedelta(days=1)
+        elif recorrencia == 'Semanal':
+            d = d + timedelta(weeks=1)
+        else:
+            d = _proximo_mes(d)
+    return datas
+
+@login_required
+def conta_save(request):
+    if request.method != 'POST':
+        return redirect('contas')
+    conta_id = request.POST.get('conta_id')
+    c = ContaPagar.objects.get(pk=conta_id) if conta_id else ContaPagar()
+    c.descricao = request.POST.get('descricao', '').strip()
+    c.categoria = request.POST.get('categoria', 'Boleto')
+    c.valor = Decimal(request.POST.get('valor', '0') or '0')
+    c.vencimento = request.POST.get('vencimento')
+    c.observacao = request.POST.get('observacao', '')
+    c.pago = request.POST.get('pago') == 'on'
+
+    recorrencia = request.POST.get('recorrencia', '')
+    venc = c.vencimento if isinstance(c.vencimento, date) else date.fromisoformat(c.vencimento)
+
+    # Recorrência só se aplica a contas novas (na edição altera-se só aquela conta)
+    if not conta_id and recorrencia in ('Diária', 'Semanal', 'Mensal'):
+        prazo_final = None
+        if request.POST.get('duracao') == 'prazo':
+            p = request.POST.get('prazo_final', '')
+            if p:
+                prazo_final = date.fromisoformat(p)
+        datas = _datas_recorrencia(venc, recorrencia, prazo_final)
+        import uuid
+        grupo = uuid.uuid4().hex[:12]
+        for i, d in enumerate(datas):
+            ContaPagar.objects.create(
+                descricao=c.descricao, categoria=c.categoria, valor=c.valor,
+                vencimento=d, observacao=c.observacao,
+                pago=c.pago if i == 0 else False,
+                recorrencia=recorrencia, grupo=grupo,
+            )
+        messages.success(request, f'{len(datas)} contas criadas (recorrência {recorrencia.lower()}) até {datas[-1].strftime("%d/%m/%Y")}.')
+    else:
+        c.save()
+        messages.success(request, f'Conta "{c.descricao}" salva!')
+    return redirect(f'/contas/?ano={venc.year}&mes={venc.month}')
+
+@login_required
+def conta_toggle_pago(request, pk):
+    c = get_object_or_404(ContaPagar, pk=pk)
+    c.pago = not c.pago
+    c.save()
+    messages.success(request, f'Conta "{c.descricao}" marcada como {"paga" if c.pago else "em aberto"}.')
+    return redirect(f'/contas/?ano={c.vencimento.year}&mes={c.vencimento.month}')
+
+@login_required
+def conta_delete(request, pk):
+    c = get_object_or_404(ContaPagar, pk=pk)
+    ano, mes = c.vencimento.year, c.vencimento.month
+    if request.GET.get('serie') == '1' and c.grupo:
+        total, _ = ContaPagar.objects.filter(grupo=c.grupo).delete()
+        messages.success(request, f'Série recorrente excluída ({total} contas).')
+    else:
+        c.delete()
+        messages.success(request, 'Conta excluída.')
+    return redirect(f'/contas/?ano={ano}&mes={mes}')
+
+@login_required
+def conta_detail_json(request, pk):
+    c = get_object_or_404(ContaPagar, pk=pk)
+    return JsonResponse({
+        'id': c.pk, 'descricao': c.descricao, 'categoria': c.categoria,
+        'valor': str(c.valor), 'vencimento': str(c.vencimento),
+        'pago': c.pago, 'observacao': c.observacao,
+    })
 
 
 # --- Exportar CSV ---

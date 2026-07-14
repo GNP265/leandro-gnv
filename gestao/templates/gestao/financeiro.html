@@ -14,6 +14,50 @@
   <div class="metric m-com"><div class="metric-label">Comissões</div><div class="metric-val" style="font-size:16px">{{ comissoes|brl }}</div></div>
   <div class="metric {% if lucro >= 0 %}m-lpos{% else %}m-lneg{% endif %}"><div class="metric-label">Lucro bruto</div><div class="metric-val" style="font-size:16px">{{ lucro|brl }}</div></div>
 </div>
+
+<!-- Gráfico de evolução -->
+<div class="card">
+  <div class="card-header" style="flex-wrap:wrap;gap:8px">
+    <div class="card-title">📈 Evolução — Faturamento, Custos e Lucro</div>
+    <div class="tab-bar" style="margin-bottom:0">
+      <button type="button" class="tab active" id="tab-diario" onclick="mostrarGrafico('diario')">Diário</button>
+      <button type="button" class="tab" id="tab-semanal" onclick="mostrarGrafico('semanal')">Semanal</button>
+      <button type="button" class="tab" id="tab-mensal" onclick="mostrarGrafico('mensal')">Mensal</button>
+    </div>
+  </div>
+  <div class="series-filter" id="filtro-series-linha"></div>
+  <div style="position:relative;height:300px"><canvas id="grafico-evolucao"></canvas></div>
+</div>
+
+<!-- Comparativo mensal em barras -->
+<div class="card">
+  <div class="card-header" style="flex-wrap:wrap;gap:8px">
+    <div class="card-title">📊 Comparativo mensal <span style="font-weight:400;color:#888780">(% = variação vs mês anterior)</span></div>
+    <select id="filtro-mes-bar" class="chart-filter" onchange="atualizaBarras()"></select>
+  </div>
+  <div class="series-filter" id="filtro-series-barras"></div>
+  <div style="position:relative;height:300px"><canvas id="grafico-mensal"></canvas></div>
+</div>
+
+<!-- Ranking de serviços -->
+<div class="card">
+  <div class="card-header" style="flex-wrap:wrap;gap:8px">
+    <div class="card-title">🏆 Top 5 serviços</div>
+    <select id="filtro-mes-rank" class="chart-filter" onchange="atualizaRankings()"></select>
+  </div>
+  <div class="grid-2" style="margin-bottom:0">
+    <div>
+      <div class="rank-subtitle">💰 Que mais geram lucro</div>
+      <div style="position:relative;height:240px"><canvas id="grafico-rank-lucro"></canvas></div>
+    </div>
+    <div>
+      <div class="rank-subtitle">🔁 Que mais acontecem (quantidade)</div>
+      <div style="position:relative;height:240px"><canvas id="grafico-rank-qtd"></canvas></div>
+    </div>
+  </div>
+</div>
+{{ chart_data|json_script:"chart-data" }}
+{{ rank_data|json_script:"rank-data" }}
 <div class="card" style="padding:0;overflow-x:auto">
   <table>
     <thead><tr>
@@ -33,4 +77,204 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/chart.umd.js' %}"></script>
+<script src="{% static 'js/chartjs-plugin-datalabels.min.js' %}"></script>
+<script>
+Chart.register(ChartDataLabels);
+
+const dados = JSON.parse(document.getElementById('chart-data').textContent);
+const rank = JSON.parse(document.getElementById('rank-data').textContent);
+const brl = v => v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const brlCurto = v => Math.abs(v) >= 1000 ? 'R$ ' + (v/1000).toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' mil' : 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+
+const tooltipPadrao = {
+  backgroundColor:'#1C1C1C', titleFont:{size:12}, bodyFont:{size:12}, padding:10, cornerRadius:8,
+  callbacks: {label: c => ' ' + (c.dataset.label || '') + ': ' + brl(c.parsed.y ?? c.parsed.x)}
+};
+const legendaPadrao = {position:'top', align:'end', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, boxHeight:8, color:'#52514e', font:{size:12}}};
+
+// Filtro de séries (Faturamento / Custos / Lucro): botões que ligam/desligam
+// cada linha ou barra do gráfico. Ao menos uma série fica sempre visível.
+function criaFiltroSeries(containerId, chart){
+  const cont = document.getElementById(containerId);
+  chart.data.datasets.forEach((ds, i) => {
+    const cor = ds.borderColor || ds.backgroundColor;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'serie-chip ativo';
+    b.innerHTML = '<span class="serie-dot" style="background:' + cor + '"></span>' + ds.label;
+    b.onclick = () => {
+      const visivel = chart.isDatasetVisible(i);
+      const totalVisiveis = chart.data.datasets.filter((_, j) => chart.isDatasetVisible(j)).length;
+      if (visivel && totalVisiveis <= 1) return; // não deixa apagar tudo
+      chart.setDatasetVisibility(i, !visivel);
+      b.classList.toggle('ativo', !visivel);
+      chart.update();
+    };
+    cont.appendChild(b);
+  });
+}
+
+// ===== 1. Gráfico de linha (evolução) com rótulos de dados =====
+let grafico = null;
+
+function mostrarGrafico(visao){
+  ['diario','semanal','mensal'].forEach(v => document.getElementById('tab-'+v).classList.toggle('active', v===visao));
+  const d = dados[visao];
+  grafico.data.labels = d.labels;
+  grafico.data.datasets[0].data = d.fat;
+  grafico.data.datasets[1].data = d.custo;
+  grafico.data.datasets[2].data = d.lucro;
+  grafico.update();
+}
+
+grafico = new Chart(document.getElementById('grafico-evolucao'), {
+  type: 'line',
+  data: {
+    labels: dados.diario.labels,
+    datasets: [
+      {label:'Faturamento', data:dados.diario.fat, borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:2, pointRadius:0, pointHoverRadius:5, tension:.3},
+      {label:'Custos', data:dados.diario.custo, borderColor:'#e34948', backgroundColor:'#e34948', borderWidth:2, pointRadius:0, pointHoverRadius:5, tension:.3},
+      {label:'Lucro bruto', data:dados.diario.lucro, borderColor:'#008300', backgroundColor:'#008300', borderWidth:2, pointRadius:0, pointHoverRadius:5, tension:.3},
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: {mode:'index', intersect:false},
+    layout: {padding:{top:18, right:14}},
+    plugins: {
+      legend: {display:false}, // os botões de filtro acima fazem o papel da legenda
+      tooltip: tooltipPadrao,
+      datalabels: {
+        align:'top', anchor:'center', offset:5, clamp:true,
+        display: ctx => ctx.dataset.data[ctx.dataIndex] > 0,
+        formatter: v => brlCurto(v),
+        color: ctx => ctx.dataset.borderColor,
+        font: {size:9, weight:'600'},
+      }
+    },
+    scales: {
+      x: {grid:{display:false}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:11}, maxTicksLimit:12, maxRotation:0}},
+      y: {grace:'12%', grid:{color:'#e1e0d9'}, border:{display:false}, ticks:{color:'#898781', font:{size:11}, callback: v => brlCurto(v)}}
+    }
+  }
+});
+
+// ===== 2. Comparativo mensal em barras (% vs mês anterior) =====
+const M = dados.mensal;
+function variacaoPct(arr){
+  return arr.map((v, i) => {
+    if (i === 0) return null;
+    const ant = arr[i-1];
+    return ant > 0 ? (v - ant) / ant * 100 : null;
+  });
+}
+const pctCompleto = {fat: variacaoPct(M.fat), custo: variacaoPct(M.custo), lucro: variacaoPct(M.lucro)};
+
+const graficoBarras = new Chart(document.getElementById('grafico-mensal'), {
+  type: 'bar',
+  data: {
+    labels: M.labels,
+    datasets: [
+      {label:'Faturamento', chave:'fat', data:M.fat, backgroundColor:'#2a78d6', borderRadius:4, pctData:pctCompleto.fat, inverte:false},
+      {label:'Custos', chave:'custo', data:M.custo, backgroundColor:'#e34948', borderRadius:4, pctData:pctCompleto.custo, inverte:true},
+      {label:'Lucro bruto', chave:'lucro', data:M.lucro, backgroundColor:'#008300', borderRadius:4, pctData:pctCompleto.lucro, inverte:false},
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    layout: {padding:{top:20}},
+    plugins: {
+      legend: {display:false}, // os botões de filtro acima fazem o papel da legenda
+      tooltip: {...tooltipPadrao, callbacks:{label: c => {
+        const p = c.dataset.pctData[c.dataIndex];
+        const varTxt = p == null ? '' : '  (' + (p>=0?'+':'') + p.toFixed(1) + '% vs mês anterior)';
+        return ' ' + c.dataset.label + ': ' + brl(c.parsed.y) + varTxt;
+      }}},
+      datalabels: {
+        anchor:'end', align:'end', offset:-2, clamp:true, rotation:-90,
+        display: ctx => ctx.dataset.pctData[ctx.dataIndex] != null && ctx.dataset.data[ctx.dataIndex] > 0,
+        formatter: (v, ctx) => {const p = ctx.dataset.pctData[ctx.dataIndex]; return (p>=0?'+':'') + p.toFixed(0) + '%';},
+        color: ctx => {
+          const p = ctx.dataset.pctData[ctx.dataIndex];
+          const bom = ctx.dataset.inverte ? p < 0 : p >= 0;
+          return bom ? '#006300' : '#A32D2D';
+        },
+        font: {size:9, weight:'700'},
+      }
+    },
+    scales: {
+      x: {grid:{display:false}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:11}}},
+      y: {grace:'18%', grid:{color:'#e1e0d9'}, border:{display:false}, ticks:{color:'#898781', font:{size:11}, callback: v => brlCurto(v)}}
+    }
+  }
+});
+
+// Filtro: ano inteiro ou um mês específico
+const filtroBar = document.getElementById('filtro-mes-bar');
+filtroBar.add(new Option('Ano inteiro (12 meses)', 'ano'));
+for (let i = M.labels.length - 1; i >= 0; i--) filtroBar.add(new Option(M.labels[i], i));
+
+function atualizaBarras(){
+  const sel = filtroBar.value;
+  const idx = sel === 'ano' ? null : +sel;
+  graficoBarras.data.labels = idx === null ? M.labels : [M.labels[idx]];
+  graficoBarras.data.datasets.forEach(ds => {
+    ds.data = idx === null ? M[ds.chave] : [M[ds.chave][idx]];
+    ds.pctData = idx === null ? pctCompleto[ds.chave] : [pctCompleto[ds.chave][idx]];
+  });
+  // Rótulo horizontal quando é um mês só (tem espaço de sobra)
+  graficoBarras.options.plugins.datalabels.rotation = idx === null ? -90 : 0;
+  graficoBarras.update();
+}
+
+// ===== 3. Rankings top 5 (lucro e quantidade) =====
+function criaRanking(canvasId, cor, formata){
+  return new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: {labels: [], datasets: [{data: [], backgroundColor: cor, borderRadius: 4}]},
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      layout: {padding:{right:62}},
+      plugins: {
+        legend: {display:false},
+        tooltip: {...tooltipPadrao, callbacks:{label: c => ' ' + formata(c.parsed.x)}},
+        datalabels: {
+          anchor:'end', align:'end', clamp:true,
+          formatter: formata, color:'#52514e', font:{size:10, weight:'600'},
+        }
+      },
+      scales: {
+        x: {grid:{color:'#e1e0d9'}, border:{display:false}, ticks:{display:false}},
+        y: {grid:{display:false}, border:{color:'#c3c2b7'},
+            ticks:{color:'#52514e', font:{size:11},
+                   callback: function(v){const l = this.getLabelForValue(v); return l.length > 24 ? l.slice(0, 23) + '…' : l;}}}
+      }
+    }
+  });
+}
+const rankLucro = criaRanking('grafico-rank-lucro', '#008300', v => brlCurto(v));
+const rankQtd = criaRanking('grafico-rank-qtd', '#2a78d6', v => v + '×');
+
+const filtroRank = document.getElementById('filtro-mes-rank');
+rank.meses.forEach(([valor, texto]) => filtroRank.add(new Option(texto, valor)));
+
+criaFiltroSeries('filtro-series-linha', grafico);
+criaFiltroSeries('filtro-series-barras', graficoBarras);
+
+function atualizaRankings(){
+  const d = rank.dados[filtroRank.value] || {lucro: [], qtd: []};
+  rankLucro.data.labels = d.lucro.map(x => x[0]);
+  rankLucro.data.datasets[0].data = d.lucro.map(x => x[1]);
+  rankLucro.update();
+  rankQtd.data.labels = d.qtd.map(x => x[0]);
+  rankQtd.data.datasets[0].data = d.qtd.map(x => x[1]);
+  rankQtd.update();
+}
+atualizaRankings();
+</script>
 {% endblock %}

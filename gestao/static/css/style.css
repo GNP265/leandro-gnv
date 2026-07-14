@@ -151,6 +151,47 @@ tr.clickable{cursor:pointer}
 .detail-label{font-size:11px;color:#888780;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
 .detail-val{font-size:13px}
 
+/* Linhas de serviço (múltiplos serviços por OS) */
+.servico-row{margin-bottom:8px}
+.servico-row-main{display:flex;gap:8px;align-items:center}
+.servico-row select{flex:1;font-size:13px;padding:8px 10px;border:1px solid #D3D1C7;border-radius:8px;background:#fff;color:#2C2C2A}
+.servico-row select:focus{outline:none;border-color:#BA7517}
+.servico-row input{width:100%;font-size:13px;padding:8px 10px;border:1px solid #D3D1C7;border-radius:8px;background:#fff;color:#2C2C2A;margin-top:6px}
+.servico-row input:focus{outline:none;border-color:#BA7517}
+.btn-remove-servico{padding:7px 11px;flex-shrink:0}
+
+/* Calendário de contas */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.cal-head{margin-bottom:6px}
+.cal-dow{font-size:10px;font-weight:500;color:#888780;text-transform:uppercase;letter-spacing:.05em;text-align:center;padding:4px 0}
+.cal-day{background:#FAFAF8;border:1px solid #EAE8E2;border-radius:8px;min-height:78px;padding:4px 5px;overflow:hidden}
+.cal-other{opacity:.4}
+.cal-today{border-color:#BA7517;background:#FEF9F0;box-shadow:0 0 0 1px #BA7517}
+.cal-num{font-size:11px;font-weight:500;color:#888780;margin-bottom:3px}
+.cal-today .cal-num{color:#BA7517}
+.cal-event{font-size:10px;line-height:1.25;padding:2px 5px;border-radius:5px;margin-bottom:2px;cursor:pointer;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-event:hover{filter:brightness(.96)}
+.ce-paga{background:#EAF3DE;color:#27500A;border-color:#C0DD97}
+.ce-aberta{background:#FAEEDA;color:#854F0B;border-color:#FAC775}
+.ce-vencida{background:#FCEBEB;color:#791F1F;border-color:#F7C1C1}
+.ce-valor{font-weight:600}
+.cal-legend{display:flex;gap:16px;margin-top:8px;font-size:11px;color:#5F5E5A}
+.cal-legend>span{display:flex;align-items:center;gap:5px}
+.cal-dot{width:10px;height:10px;border-radius:3px;border:1px solid;display:inline-block}
+
+/* Filtros dos gráficos */
+.chart-filter{font-size:12px;padding:6px 10px;border:1px solid #D3D1C7;border-radius:8px;background:#fff;color:#2C2C2A;cursor:pointer}
+.chart-filter:focus{outline:none;border-color:#BA7517}
+.rank-subtitle{font-size:12px;font-weight:500;color:#5F5E5A;margin-bottom:6px}
+
+/* Filtro de séries (liga/desliga Faturamento, Custos, Lucro) */
+.series-filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.serie-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid #D3D1C7;background:#F5F3EE;color:#B0AFA8;cursor:pointer;transition:all .15s}
+.serie-chip .serie-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;opacity:.25}
+.serie-chip.ativo{background:#fff;color:#2C2C2A;font-weight:500}
+.serie-chip.ativo .serie-dot{opacity:1}
+.serie-chip:hover{border-color:#BA7517}
+
 /* Responsive */
 @media(max-width:768px){
   .sidebar{display:none}
