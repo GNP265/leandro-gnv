@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Leandro GNV{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
@@ -15,7 +16,7 @@
     </div>
     <div class="topbar-actions">
       <a href="{% url 'exportar_csv' %}" class="btn btn-topbar">📥 Exportar CSV</a>
-      <span style="color:#888;font-size:12px">{{ user.username }}</span>
+      <span style="color:#9C7DC4;font-size:12px">{{ user.username }}</span>
       <a href="{% url 'logout' %}" class="btn btn-topbar" style="font-size:12px">Sair</a>
     </div>
   </div>

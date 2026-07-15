@@ -4,30 +4,187 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Login — Leandro GNV</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+  <style>
+    /* ===== ClayViolet — tela de login ===== */
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',system-ui,sans-serif;background:#F4F0FB;color:#4B3B72;min-height:100vh}
+
+    .split{display:flex;min-height:100vh}
+
+    /* ---- Painel esquerdo: vitrine ---- */
+    .hero{
+      flex:1.15;position:relative;overflow:hidden;display:flex;flex-direction:column;
+      justify-content:flex-end;padding:48px 52px;
+      background:
+        radial-gradient(1100px 620px at 85% -10%, rgba(124,58,237,.38), transparent 60%),
+        radial-gradient(900px 700px at -15% 110%, rgba(91,33,182,.5), transparent 55%),
+        linear-gradient(160deg,#241736 0%,#1A1026 45%,#120A1C 100%);
+    }
+    /* textura sutil de "piso de oficina" */
+    .hero::before{
+      content:'';position:absolute;inset:0;opacity:.05;pointer-events:none;
+      background-image:repeating-linear-gradient(115deg,#fff 0 1px,transparent 1px 26px);
+    }
+    /* camada de gradiente escuro para destacar logo e frase */
+    .hero::after{
+      content:'';position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(to top, rgba(8,4,16,.88) 0%, rgba(8,4,16,.25) 42%, transparent 65%),
+                 linear-gradient(to bottom, rgba(8,4,16,.55) 0%, transparent 30%);
+    }
+    .hero > *{position:relative;z-index:1}
+
+    .hero-logo{width:230px;max-width:56%;filter:drop-shadow(0 10px 28px rgba(0,0,0,.45))}
+
+    .hero-art{
+      position:absolute;right:-40px;bottom:120px;width:75%;opacity:.5;z-index:0;
+    }
+
+    .hero-caption h1{
+      font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:-.02em;
+      font-size:clamp(2.2rem,4.2vw,3.4rem);line-height:1.12;color:#fff;
+      text-shadow:0 4px 24px rgba(0,0,0,.5);
+    }
+    .hero-caption h1 em{font-style:normal;color:#C4B5FD}
+    .hero-caption p{
+      margin-top:14px;font-size:1.05rem;line-height:1.6;color:#CBBEE8;max-width:34ch;
+    }
+    .hero-badges{display:flex;gap:8px;margin-top:22px;flex-wrap:wrap}
+    .hero-badge{
+      font-size:.8125rem;font-weight:600;color:#DDD6FE;padding:7px 16px;border-radius:9999px;
+      background:rgba(124,58,237,.28);border:1px solid rgba(196,181,253,.35);backdrop-filter:blur(4px);
+    }
+
+    /* ---- Painel direito: formulário ---- */
+    .panel{
+      flex:1;display:flex;align-items:center;justify-content:center;position:relative;
+      padding:48px 32px;background:#F4F0FB;overflow:hidden;
+    }
+    /* bolhas clay decorativas */
+    .blob{position:absolute;border-radius:50%;pointer-events:none}
+    .blob-1{width:340px;height:340px;top:-120px;right:-100px;
+      background:radial-gradient(circle at 35% 30%,#EDE6F7,#DDD6FE);
+      box-shadow:0 24px 60px rgba(124,58,237,.18), inset 0 6px 14px rgba(255,255,255,.8)}
+    .blob-2{width:220px;height:220px;bottom:-70px;left:-60px;
+      background:radial-gradient(circle at 35% 30%,#F4F0FB,#E8DFFF);
+      box-shadow:0 18px 44px rgba(124,58,237,.14), inset 0 5px 12px rgba(255,255,255,.85)}
+
+    .login-card{
+      position:relative;width:430px;max-width:100%;background:#FFFFFF;border-radius:40px;padding:44px 40px;
+      box-shadow:0 8px 32px rgba(124,58,237,.12), 0 2px 8px rgba(124,58,237,.08),
+                 inset 0 2px 4px rgba(255,255,255,.7), inset 0 -1px 3px rgba(124,58,237,.06);
+    }
+    .login-card .hello{
+      display:inline-flex;align-items:center;gap:8px;font-size:.8125rem;font-weight:600;
+      color:#5B21B6;background:#DDD6FE;border-radius:9999px;padding:6px 16px;margin-bottom:18px;
+    }
+    .login-card h2{
+      font-family:'Nunito',sans-serif;font-weight:800;font-size:2rem;line-height:1.2;
+      color:#2E1065;letter-spacing:-.01em;
+    }
+    .login-card .sub{margin-top:8px;font-size:.9375rem;color:#9C7DC4;line-height:1.55}
+
+    form{margin-top:28px}
+    .field{margin-bottom:18px}
+    .field label{
+      display:block;font-size:.8125rem;font-weight:600;letter-spacing:.01em;
+      color:#4B3B72;margin-bottom:7px;
+    }
+    .field input{
+      width:100%;font-family:'DM Sans',sans-serif;font-size:1rem;color:#4B3B72;
+      background:#E8DFFF;border:2px solid transparent;border-radius:18px;padding:13px 18px;
+      box-shadow:inset 0 2px 5px rgba(91,33,182,.10);
+      transition:background .18s,border-color .18s,box-shadow .18s;
+    }
+    .field input::placeholder{color:#9C7DC4}
+    .field input:focus{
+      outline:none;background:#FFFFFF;border-color:#7C3AED;
+      box-shadow:0 0 0 4px rgba(124,58,237,.15);
+    }
+
+    .btn-entrar{
+      width:100%;margin-top:8px;cursor:pointer;border:none;border-radius:9999px;
+      background:#7C3AED;color:#fff;font-family:'DM Sans',sans-serif;font-weight:700;
+      font-size:1rem;letter-spacing:.01em;padding:15px 28px;
+      box-shadow:0 10px 26px rgba(124,58,237,.35), inset 0 2px 3px rgba(255,255,255,.35);
+      transition:background .18s,transform .12s,box-shadow .18s;
+    }
+    .btn-entrar:hover{background:#5B21B6}
+    .btn-entrar:active{transform:translateY(1px);box-shadow:inset 0 3px 6px rgba(91,33,182,.45)}
+
+    .alert{
+      display:flex;align-items:center;gap:8px;font-size:.875rem;font-weight:500;
+      background:#FEE2E2;color:#991B1B;border-radius:18px;padding:11px 16px;margin-top:20px;
+    }
+
+    .card-foot{
+      margin-top:26px;padding-top:18px;border-top:1px solid #EDE6F7;text-align:center;
+      font-size:.8125rem;color:#9C7DC4;
+    }
+    .card-foot strong{color:#7C3AED;font-weight:700}
+
+    @media(max-width:900px){
+      .hero{display:none}
+      .panel{min-height:100vh}
+    }
+  </style>
 </head>
 <body>
-<div class="login-page">
-  <div class="login-card">
-    <div class="login-brand">
-      <div class="icon">🔥</div>
-      <h1>Leandro GNV</h1>
-      <p>Sistema de Gestão</p>
+<div class="split">
+
+  <!-- Vitrine -->
+  <div class="hero">
+    <!-- Silhueta de carro (decorativa) -->
+    <svg class="hero-art" viewBox="0 0 640 200" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
+      <path d="M40 150 h60 l38-52 q10-14 28-16 l150-14 q22-2 40 10 l86 54 h108 q26 0 26 24 v14 q0 12-12 12 h-52"
+            stroke="#A78BFA" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M198 148 h180" stroke="#A78BFA" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="150" cy="160" r="30" stroke="#A78BFA" stroke-width="5"/>
+      <circle cx="150" cy="160" r="12" stroke="#A78BFA" stroke-width="4"/>
+      <circle cx="440" cy="160" r="30" stroke="#A78BFA" stroke-width="5"/>
+      <circle cx="440" cy="160" r="12" stroke="#A78BFA" stroke-width="4"/>
+      <path d="M250 84 l110-10 m-60-24 l-8 34" stroke="#A78BFA" stroke-width="4" stroke-linecap="round"/>
+    </svg>
+
+    <div class="hero-caption">
+      <h1>Seu sistema<br>de <em>gestão.</em></h1>
+      <p>Ordens de serviço, financeiro e contas a pagar da sua oficina em um só lugar.</p>
+      <div class="hero-badges">
+        <span class="hero-badge">🔧 Ordens de Serviço</span>
+        <span class="hero-badge">📈 Financeiro</span>
+        <span class="hero-badge">📅 Contas a Pagar</span>
+      </div>
     </div>
-    {% if messages %}{% for msg in messages %}<div class="alert alert-error">{{ msg }}</div>{% endfor %}{% endif %}
-    <form method="post">
-      {% csrf_token %}
-      <div class="field" style="margin-bottom:12px">
-        <label>Usuário</label>
-        <input type="text" name="username" required autofocus placeholder="Digite seu usuário">
-      </div>
-      <div class="field" style="margin-bottom:20px">
-        <label>Senha</label>
-        <input type="password" name="password" required placeholder="Digite sua senha">
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:10px">Entrar</button>
-    </form>
   </div>
+
+  <!-- Formulário -->
+  <div class="panel">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="login-card">
+      <span class="hello">👋 Bem-vindo de volta</span>
+      <h2>Acesse sua conta</h2>
+      <p class="sub">Entre com suas credenciais para continuar.</p>
+
+      {% if messages %}{% for msg in messages %}<div class="alert">⚠️ {{ msg }}</div>{% endfor %}{% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="field">
+          <label for="username">Usuário</label>
+          <input type="text" id="username" name="username" required autofocus placeholder="Digite seu usuário">
+        </div>
+        <div class="field">
+          <label for="password">Senha</label>
+          <input type="password" id="password" name="password" required placeholder="Digite sua senha">
+        </div>
+        <button type="submit" class="btn-entrar">Entrar</button>
+      </form>
+
+      <div class="card-foot">Sistema de Gestão <strong>Leandro GNV</strong></div>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>

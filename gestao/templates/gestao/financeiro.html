@@ -8,11 +8,12 @@
   <a href="?periodo=trimestre" class="tab {% if periodo == 'trimestre' %}active{% endif %}">Trimestre</a>
   <a href="?periodo=tudo" class="tab {% if periodo == 'tudo' %}active{% endif %}">Tudo</a>
 </div>
-<div class="metrics-row" style="grid-template-columns:repeat(4,1fr)">
-  <div class="metric m-fat"><div class="metric-label">Faturamento</div><div class="metric-val" style="font-size:16px">{{ faturamento|brl }}</div></div>
-  <div class="metric m-mat"><div class="metric-label">Custo materiais</div><div class="metric-val" style="font-size:16px">{{ custo_mat|brl }}</div></div>
-  <div class="metric m-com"><div class="metric-label">Comissões</div><div class="metric-val" style="font-size:16px">{{ comissoes|brl }}</div></div>
-  <div class="metric {% if lucro >= 0 %}m-lpos{% else %}m-lneg{% endif %}"><div class="metric-label">Lucro bruto</div><div class="metric-val" style="font-size:16px">{{ lucro|brl }}</div></div>
+<div class="metrics-row" style="grid-template-columns:repeat(5,1fr)">
+  <div class="metric m-fat"><div class="metric-label">Faturamento</div><div class="metric-val" style="font-size:15px">{{ faturamento|brl }}</div></div>
+  <div class="metric m-mat"><div class="metric-label">Custo materiais</div><div class="metric-val" style="font-size:15px">{{ custo_mat|brl }}</div></div>
+  <div class="metric m-tot"><div class="metric-label">Comissões</div><div class="metric-val" style="font-size:15px">{{ comissoes|brl }}</div></div>
+  <div class="metric m-com"><div class="metric-label">Contas a pagar</div><div class="metric-val" style="font-size:15px">{{ contas_total|brl }}</div></div>
+  <div class="metric {% if lucro >= 0 %}m-lpos{% else %}m-lneg{% endif %}"><div class="metric-label">Lucro bruto (após contas)</div><div class="metric-val" style="font-size:15px">{{ lucro|brl }}</div></div>
 </div>
 
 <!-- Gráfico de evolução -->
@@ -32,7 +33,7 @@
 <!-- Comparativo mensal em barras -->
 <div class="card">
   <div class="card-header" style="flex-wrap:wrap;gap:8px">
-    <div class="card-title">📊 Comparativo mensal <span style="font-weight:400;color:#888780">(% = variação vs mês anterior)</span></div>
+    <div class="card-title">📊 Comparativo mensal <span style="font-weight:400;color:#9C7DC4">(% = variação vs mês anterior)</span></div>
     <select id="filtro-mes-bar" class="chart-filter" onchange="atualizaBarras()"></select>
   </div>
   <div class="series-filter" id="filtro-series-barras"></div>
@@ -68,7 +69,7 @@
     <tbody>
       {% for os in ordens_list %}
       <tr>
-        <td style="color:#888;font-size:11px">{{ os.pk }}</td><td>{{ os.nome_cliente }}</td><td>{{ os.servico }}</td>
+        <td style="color:#9C7DC4;font-size:11px">{{ os.pk }}</td><td>{{ os.nome_cliente }}</td><td>{{ os.servico }}</td>
         <td>{{ os.data|date:"d/m/Y" }}</td><td>{{ os.valor|brl }}</td><td>{{ os.material|brl }}</td>
         <td>{{ os.comissao|brl }}</td><td><span class="badge badge-gray" style="font-size:10px">{{ os.pagamento|default:"-" }}</span></td>
         <td><span class="{{ os.lucro|lucro_class }}">{{ os.lucro|brl }}</span></td>
@@ -92,10 +93,10 @@ const brl = v => v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
 const brlCurto = v => Math.abs(v) >= 1000 ? 'R$ ' + (v/1000).toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' mil' : 'R$ ' + Math.round(v).toLocaleString('pt-BR');
 
 const tooltipPadrao = {
-  backgroundColor:'#1C1C1C', titleFont:{size:12}, bodyFont:{size:12}, padding:10, cornerRadius:8,
+  backgroundColor:'#5B21B6', titleFont:{size:12}, bodyFont:{size:12}, padding:10, cornerRadius:8,
   callbacks: {label: c => ' ' + (c.dataset.label || '') + ': ' + brl(c.parsed.y ?? c.parsed.x)}
 };
-const legendaPadrao = {position:'top', align:'end', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, boxHeight:8, color:'#52514e', font:{size:12}}};
+const legendaPadrao = {position:'top', align:'end', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, boxHeight:8, color:'#6D5A8C', font:{size:12}}};
 
 // Filtro de séries (Faturamento / Custos / Lucro): botões que ligam/desligam
 // cada linha ou barra do gráfico. Ao menos uma série fica sempre visível.
@@ -151,15 +152,15 @@ grafico = new Chart(document.getElementById('grafico-evolucao'), {
       tooltip: tooltipPadrao,
       datalabels: {
         align:'top', anchor:'center', offset:5, clamp:true,
-        display: ctx => ctx.dataset.data[ctx.dataIndex] > 0,
+        display: ctx => ctx.dataset.data[ctx.dataIndex] !== 0,
         formatter: v => brlCurto(v),
         color: ctx => ctx.dataset.borderColor,
         font: {size:9, weight:'600'},
       }
     },
     scales: {
-      x: {grid:{display:false}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:11}, maxTicksLimit:12, maxRotation:0}},
-      y: {grace:'12%', grid:{color:'#e1e0d9'}, border:{display:false}, ticks:{color:'#898781', font:{size:11}, callback: v => brlCurto(v)}}
+      x: {grid:{display:false}, border:{color:'#C4B5FD'}, ticks:{color:'#9C7DC4', font:{size:11}, maxTicksLimit:12, maxRotation:0}},
+      y: {grace:'12%', grid:{color:'#EDE6F7'}, border:{display:false}, ticks:{color:'#9C7DC4', font:{size:11}, callback: v => brlCurto(v)}}
     }
   }
 });
@@ -197,19 +198,19 @@ const graficoBarras = new Chart(document.getElementById('grafico-mensal'), {
       }}},
       datalabels: {
         anchor:'end', align:'end', offset:-2, clamp:true, rotation:-90,
-        display: ctx => ctx.dataset.pctData[ctx.dataIndex] != null && ctx.dataset.data[ctx.dataIndex] > 0,
+        display: ctx => ctx.dataset.pctData[ctx.dataIndex] != null && ctx.dataset.data[ctx.dataIndex] !== 0,
         formatter: (v, ctx) => {const p = ctx.dataset.pctData[ctx.dataIndex]; return (p>=0?'+':'') + p.toFixed(0) + '%';},
         color: ctx => {
           const p = ctx.dataset.pctData[ctx.dataIndex];
           const bom = ctx.dataset.inverte ? p < 0 : p >= 0;
-          return bom ? '#006300' : '#A32D2D';
+          return bom ? '#047857' : '#B91C1C';
         },
         font: {size:9, weight:'700'},
       }
     },
     scales: {
-      x: {grid:{display:false}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:11}}},
-      y: {grace:'18%', grid:{color:'#e1e0d9'}, border:{display:false}, ticks:{color:'#898781', font:{size:11}, callback: v => brlCurto(v)}}
+      x: {grid:{display:false}, border:{color:'#C4B5FD'}, ticks:{color:'#9C7DC4', font:{size:11}}},
+      y: {grace:'18%', grid:{color:'#EDE6F7'}, border:{display:false}, ticks:{color:'#9C7DC4', font:{size:11}, callback: v => brlCurto(v)}}
     }
   }
 });
@@ -245,13 +246,13 @@ function criaRanking(canvasId, cor, formata){
         tooltip: {...tooltipPadrao, callbacks:{label: c => ' ' + formata(c.parsed.x)}},
         datalabels: {
           anchor:'end', align:'end', clamp:true,
-          formatter: formata, color:'#52514e', font:{size:10, weight:'600'},
+          formatter: formata, color:'#6D5A8C', font:{size:10, weight:'600'},
         }
       },
       scales: {
-        x: {grid:{color:'#e1e0d9'}, border:{display:false}, ticks:{display:false}},
-        y: {grid:{display:false}, border:{color:'#c3c2b7'},
-            ticks:{color:'#52514e', font:{size:11},
+        x: {grid:{color:'#EDE6F7'}, border:{display:false}, ticks:{display:false}},
+        y: {grid:{display:false}, border:{color:'#C4B5FD'},
+            ticks:{color:'#6D5A8C', font:{size:11},
                    callback: function(v){const l = this.getLabelForValue(v); return l.length > 24 ? l.slice(0, 23) + '…' : l;}}}
       }
     }

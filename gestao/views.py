@@ -107,6 +107,25 @@ def dashboard(request):
     os_mes = OrdemServico.objects.filter(data__year=hoje.year, data__month=hoje.month)
     m = _metrics(os_mes)
 
+    # Contas a pagar do mês entram no cálculo do lucro
+    contas_mes_total = (ContaPagar.objects
+                        .filter(vencimento__year=hoje.year, vencimento__month=hoje.month)
+                        .aggregate(t=Sum('valor'))['t'] or Decimal('0'))
+    m['lucro'] = m['lucro'] - contas_mes_total
+
+    # Mini calendário: contas dos próximos 7 dias
+    DOW = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+    fim_semana = hoje + timedelta(days=6)
+    contas_por_dia = {}
+    for c in ContaPagar.objects.filter(vencimento__gte=hoje, vencimento__lte=fim_semana):
+        contas_por_dia.setdefault(c.vencimento, []).append(c)
+    semana = []
+    for i in range(7):
+        d = hoje + timedelta(days=i)
+        semana.append({'dia': d, 'dow': DOW[d.weekday()], 'hoje': d == hoje,
+                       'contas': contas_por_dia.get(d, [])})
+    total_semana = sum((c.valor for cs in contas_por_dia.values() for c in cs), Decimal('0'))
+
     recentes = OrdemServico.objects.all()[:6]
     # Serviços mais frequentes (cada serviço da OS conta separadamente)
     cnt = Counter()
@@ -120,6 +139,8 @@ def dashboard(request):
 
     ctx = {
         **m, 'recentes': recentes, 'top_servicos': top_servicos, 'max_svc': max_svc,
+        'contas_mes_total': contas_mes_total,
+        'semana': semana, 'total_semana': total_semana,
         'periodo_label': hoje.strftime('%B de %Y'), 'page': 'dashboard',
     }
     return render(request, 'gestao/dashboard.html', ctx)
@@ -250,22 +271,31 @@ def _serie_evolucao():
     registros = (OrdemServico.objects.filter(data__gte=inicio)
                  .values_list('data', 'valor', 'material', 'comissao'))
 
+    # Contas a pagar por dia de vencimento (entram no lucro)
+    contas_dia = {}
+    for venc, val in (ContaPagar.objects.filter(vencimento__gte=inicio)
+                      .values_list('vencimento', 'valor')):
+        contas_dia[venc] = contas_dia.get(venc, 0.0) + float(val or 0)
+
     dia = {}
     for d, v, mt, cm in registros:
         v, mt, cm = float(v or 0), float(mt or 0), float(cm or 0)
         b = dia.setdefault(d, [0.0, 0.0])
         b[0] += v
         b[1] += mt + cm
+    # garante que dias que só têm contas também apareçam no lucro
+    for d in contas_dia:
+        dia.setdefault(d, [0.0, 0.0])
 
-    def ponto(fat, custo):
-        return round(fat, 2), round(custo, 2), round(fat - custo, 2)
+    def ponto(fat, custo, contas):
+        return round(fat, 2), round(custo, 2), round(fat - custo - contas, 2)
 
     # Diário — últimos 30 dias
     diario = {'labels': [], 'fat': [], 'custo': [], 'lucro': []}
     for i in range(29, -1, -1):
         d = hoje - timedelta(days=i)
         fat, custo = dia.get(d, [0.0, 0.0])
-        f, c, l = ponto(fat, custo)
+        f, c, l = ponto(fat, custo, contas_dia.get(d, 0.0))
         diario['labels'].append(d.strftime('%d/%m'))
         diario['fat'].append(f); diario['custo'].append(c); diario['lucro'].append(l)
 
@@ -275,11 +305,11 @@ def _serie_evolucao():
     for i in range(11, -1, -1):
         ini = seg_atual - timedelta(weeks=i)
         fim = ini + timedelta(days=6)
-        fat = custo = 0.0
+        fat = custo = contas = 0.0
         for d, b in dia.items():
             if ini <= d <= fim:
-                fat += b[0]; custo += b[1]
-        f, c, l = ponto(fat, custo)
+                fat += b[0]; custo += b[1]; contas += contas_dia.get(d, 0.0)
+        f, c, l = ponto(fat, custo, contas)
         semanal['labels'].append(ini.strftime('%d/%m'))
         semanal['fat'].append(f); semanal['custo'].append(c); semanal['lucro'].append(l)
 
@@ -294,11 +324,11 @@ def _serie_evolucao():
         if mes == 0:
             mes = 12; ano -= 1
     for a, m in reversed(chaves):
-        fat = custo = 0.0
+        fat = custo = contas = 0.0
         for d, b in dia.items():
             if d.year == a and d.month == m:
-                fat += b[0]; custo += b[1]
-        f, c, l = ponto(fat, custo)
+                fat += b[0]; custo += b[1]; contas += contas_dia.get(d, 0.0)
+        f, c, l = ponto(fat, custo, contas)
         mensal['labels'].append(f'{MESES[m-1]}/{str(a)[2:]}')
         mensal['fat'].append(f); mensal['custo'].append(c); mensal['lucro'].append(l)
 
@@ -341,13 +371,26 @@ def _rank_servicos():
         dados[chave] = {'lucro': top5(lucro_mes[chave], True), 'qtd': top5(qtd_mes[chave])}
     return {'meses': meses_opcoes, 'dados': dados}
 
+def _contas_periodo(periodo):
+    """Total de contas a pagar com vencimento dentro do período selecionado."""
+    hoje = date.today()
+    qs = ContaPagar.objects.all()
+    if periodo == 'mes':
+        qs = qs.filter(vencimento__year=hoje.year, vencimento__month=hoje.month)
+    elif periodo == 'trimestre':
+        qs = qs.filter(vencimento__gte=hoje - timedelta(days=90), vencimento__lte=hoje)
+    return qs.aggregate(t=Sum('valor'))['t'] or Decimal('0')
+
 @login_required
 def financeiro(request):
     periodo = request.GET.get('periodo', 'mes')
     qs = _periodo_filter(OrdemServico.objects.all(), periodo)
     m = _metrics(qs)
+    contas_total = _contas_periodo(periodo)
+    m['lucro'] = m['lucro'] - contas_total
     ctx = {
-        'ordens_list': qs, **m, 'periodo': periodo, 'page': 'financeiro',
+        'ordens_list': qs, **m, 'contas_total': contas_total,
+        'periodo': periodo, 'page': 'financeiro',
         'chart_data': _serie_evolucao(),
         'rank_data': _rank_servicos(),
     }

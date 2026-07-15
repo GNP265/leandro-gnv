@@ -40,7 +40,7 @@
     <tbody>
       {% for os in ordens_list %}
       <tr class="clickable" onclick="viewOS({{ os.pk }})">
-        <td style="color:#888;font-size:11px">{{ os.pk }}</td>
+        <td style="color:#9C7DC4;font-size:11px">{{ os.pk }}</td>
         <td>{{ os.nome_cliente }}</td><td style="font-weight:500">{{ os.placa }}</td>
         <td>{{ os.modelo|default:"-" }}</td><td>{{ os.servico }}</td>
         <td>{{ os.data|date:"d/m/Y" }}</td><td>{% if os.km %}{{ os.km|format_km }}{% else %}-{% endif %}</td>
@@ -63,10 +63,10 @@
 </form>
 {% for c in clientes %}
 <div class="card" style="margin-bottom:.5rem;display:flex;align-items:center;gap:12px;padding:.85rem 1.25rem">
-  <div class="avatar" style="width:36px;height:36px;background:#FAEEDA;color:#854F0B;font-size:13px">{{ c.nome_cliente|make_list|first }}{{ c.nome_cliente|make_list|last }}</div>
+  <div class="avatar" style="width:36px;height:36px;background:#DDD6FE;color:#5B21B6;font-size:13px">{{ c.nome_cliente|make_list|first }}{{ c.nome_cliente|make_list|last }}</div>
   <div style="flex:1">
     <div style="font-weight:500;font-size:14px">{{ c.nome_cliente }}</div>
-    <div style="font-size:12px;color:#888;margin-top:2px">{{ c.telefone|default:"Sem telefone" }}</div>
+    <div style="font-size:12px;color:#9C7DC4;margin-top:2px">{{ c.telefone|default:"Sem telefone" }}</div>
   </div>
   <div style="text-align:right;flex-shrink:0">
     <div style="font-size:13px;font-weight:500">{{ c.total_valor|brl }}</div>
@@ -226,8 +226,8 @@ function calcLucro(){
   const l=v-m-c;
   const el=document.getElementById('f-lucro');
   el.value='R$ '+l.toFixed(2);
-  el.style.color=l>=0?'#3B6D11':'#A32D2D';
-  el.style.background=l>=0?'#EAF3DE':'#FCEBEB';
+  el.style.color=l>=0?'#047857':'#B91C1C';
+  el.style.background=l>=0?'#D1FAE5':'#FEE2E2';
 }
 
 let currentOS = null;
