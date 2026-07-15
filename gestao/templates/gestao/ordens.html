@@ -84,10 +84,9 @@
     <div class="servico-row-main">
       <select name="servico" required onchange="toggleCustom(this)">
         <option value="">Selecionar...</option>
-        <optgroup label="── 3ª Geração ──">{% for s in servicos_3g %}<option>{{ s }}</option>{% endfor %}</optgroup>
-        <optgroup label="── 5ª Geração ──">{% for s in servicos_5g %}<option>{{ s }}</option>{% endfor %}</optgroup>
-        <optgroup label="── Componentes ──">{% for s in servicos_comp %}<option>{{ s }}</option>{% endfor %}</optgroup>
-        <optgroup label="── Geral ──">{% for s in servicos_ger %}<option>{{ s }}</option>{% endfor %}</optgroup>
+        {% for cat, itens in servicos_grupos %}
+        <optgroup label="── {{ cat }} ──">{% for s in itens %}<option value="{{ s.nome }}">{{ s.nome }}</option>{% endfor %}</optgroup>
+        {% endfor %}
         <optgroup label="── Outro ──"><option value="__outro__">Outro serviço (digitar)...</option></optgroup>
       </select>
       <button type="button" class="btn btn-danger btn-remove-servico" onclick="removeServicoRow(this)" title="Remover este serviço">✕</button>
@@ -170,7 +169,26 @@
 {% endblock %}
 
 {% block scripts %}
+{{ servicos_precos|json_script:"servicos-precos" }}
 <script>
+// --- Preços do catálogo (Cadastro de Serviços) ---
+const PRECOS = JSON.parse(document.getElementById('servicos-precos').textContent);
+let precoManual = false; // vira true se o usuário digitar valor/custo na mão
+
+function sugerirPrecos(){
+  // Só sugere em OS nova e enquanto o usuário não mexeu nos campos
+  if(document.getElementById('os_id').value || precoManual) return;
+  let v=0, c=0, achou=false;
+  document.querySelectorAll('#servicos-container select[name=servico]').forEach(s=>{
+    const p=PRECOS[s.value];
+    if(p){v+=p[0]; c+=p[1]; achou=true;}
+  });
+  if(!achou) return;
+  document.getElementById('f-valor').value = v ? v.toFixed(2) : '';
+  document.getElementById('f-material').value = c ? c.toFixed(2) : '';
+  calcLucro();
+}
+
 // --- Múltiplos serviços ---
 function toggleCustom(sel){
   const row=sel.closest('.servico-row');
@@ -179,6 +197,7 @@ function toggleCustom(sel){
   inp.style.display=outro?'block':'none';
   inp.required=outro;
   if(!outro)inp.value='';
+  sugerirPrecos();
 }
 function addServicoRow(valor){
   const tpl=document.getElementById('servico-row-tpl');
@@ -198,6 +217,7 @@ function removeServicoRow(btn){
   if(document.querySelectorAll('#servicos-container .servico-row').length<=1)return;
   btn.closest('.servico-row').remove();
   updateRemoveButtons();
+  sugerirPrecos();
 }
 function updateRemoveButtons(){
   const rows=document.querySelectorAll('#servicos-container .servico-row');
@@ -214,10 +234,16 @@ function newOS(){
   document.getElementById('os-form').reset();
   document.getElementById('os_id').value='';
   document.getElementById('modal-os-title').textContent='Nova Ordem de Serviço';
+  precoManual=false;
   setServicos('');
   document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
   document.getElementById('modal-os').classList.add('open');
 }
+
+// Se o usuário digitar valor/custo na mão, a sugestão automática para de sobrescrever
+['f-valor','f-material'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>{precoManual=true;});
+});
 
 function calcLucro(){
   const v=parseFloat(document.getElementById('f-valor').value)||0;
@@ -261,6 +287,7 @@ function viewOS(id){
 function editOS(){
   if(!currentOS)return;
   const os=currentOS;
+  precoManual=true; // edição não sobrescreve os valores já salvos
   document.getElementById('modal-view').classList.remove('open');
   document.getElementById('os_id').value=os.id;
   document.getElementById('modal-os-title').textContent='Editar OS #'+os.id;

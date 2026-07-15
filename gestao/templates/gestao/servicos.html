@@ -1,0 +1,102 @@
+{% extends "gestao/base.html" %}
+{% load gestao_tags %}
+{% block title %}Cadastro de Serviços — Leandro GNV{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Cadastro de Serviços</div>
+  <button class="btn btn-primary" onclick="novoServico()">➕ Novo Serviço</button>
+</div>
+
+<form method="get" class="search-row">
+  <input type="text" name="q" value="{{ q }}" placeholder="Buscar serviço ou produto...">
+  <button type="submit" class="btn">Buscar</button>
+  <span class="badge badge-info">{{ total_servicos }} cadastrados</span>
+</form>
+
+<div class="card" style="padding:0;overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th style="width:36%">Nome do serviço / produto</th>
+      <th style="width:14%">Categoria</th>
+      <th style="width:13%">Valor cobrado</th>
+      <th style="width:13%">Custo</th>
+      <th style="width:13%">Margem</th>
+      <th style="width:11%">Ações</th>
+    </tr></thead>
+    <tbody>
+      {% for s in servicos_list %}
+      <tr>
+        <td>{{ s.nome }}</td>
+        <td><span class="badge badge-gray">{{ s.categoria }}</span></td>
+        <td style="font-weight:600">{{ s.valor|brl }}</td>
+        <td>{{ s.custo|brl }}</td>
+        <td><span class="{% if s.margem >= 0 %}lpos{% else %}lneg{% endif %}">{{ s.margem|brl }}</span></td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn" onclick="editarServico({{ s.pk }})" title="Editar">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </button>
+          <a class="icon-btn icon-danger" href="{% url 'servico_delete' s.pk %}" title="Excluir"
+             onclick="return confirm('Excluir \'{{ s.nome|escapejs }}\' do catálogo?\nAs OS antigas não são alteradas.')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M8 6V4h8v2"/></svg>
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6"><div class="empty-state">{% if q %}Nenhum serviço encontrado para "{{ q }}".{% else %}Nenhum serviço cadastrado ainda.<br>Clique em "➕ Novo Serviço" para começar.{% endif %}</div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="modal-servico">
+  <div class="modal modal-sm" style="width:460px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-servico-title">Novo Serviço</div>
+      <button class="btn" onclick="document.getElementById('modal-servico').classList.remove('open')" style="padding:4px 8px;border:none">✕</button>
+    </div>
+    <form method="post" action="{% url 'servico_save' %}" id="servico-form">
+      {% csrf_token %}
+      <input type="hidden" name="servico_id" id="servico_id" value="">
+      <div class="form-grid">
+        <div class="field form-full"><label>Nome do serviço / produto *</label><input name="nome" id="s-nome" required placeholder="Ex: Troca de filtro GNV"></div>
+        <div class="field form-full"><label>Categoria</label>
+          <select name="categoria" id="s-categoria">{% for k,v in categoria_choices %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+        </div>
+        <div class="field"><label>Valor cobrado (R$)</label><input name="valor" id="s-valor" type="number" step="0.01" min="0" placeholder="0,00"></div>
+        <div class="field"><label>Custo (R$)</label><input name="custo" id="s-custo" type="number" step="0.01" min="0" placeholder="0,00"></div>
+        <div class="form-full" style="font-size:11px;color:#9C7DC4;background:#F4F0FB;border-radius:12px;padding:8px 12px">
+          💡 Ao escolher este serviço em uma Nova OS, o valor e o custo serão preenchidos automaticamente (você ainda pode alterá-los na hora).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('modal-servico').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Salvar Serviço</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function novoServico(){
+  document.getElementById('servico-form').reset();
+  document.getElementById('servico_id').value='';
+  document.getElementById('modal-servico-title').textContent='Novo Serviço';
+  document.getElementById('modal-servico').classList.add('open');
+}
+function editarServico(id){
+  fetch('/servicos/'+id+'/json/').then(r=>r.json()).then(s=>{
+    document.getElementById('servico_id').value=s.id;
+    document.getElementById('modal-servico-title').textContent='Editar Serviço';
+    document.getElementById('s-nome').value=s.nome;
+    document.getElementById('s-categoria').value=s.categoria;
+    document.getElementById('s-valor').value=s.valor;
+    document.getElementById('s-custo').value=s.custo;
+    document.getElementById('modal-servico').classList.add('open');
+  });
+}
+</script>
+{% endblock %}

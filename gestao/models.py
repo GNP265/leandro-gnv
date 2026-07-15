@@ -13,6 +13,32 @@ class Colaborador(models.Model):
     def __str__(self):
         return self.nome
 
+class Servico(models.Model):
+    """Catálogo de serviços/produtos da loja (usado no formulário de OS)."""
+    CATEGORIA_CHOICES = [
+        ('3ª Geração', '3ª Geração'), ('5ª Geração', '5ª Geração'),
+        ('Componentes', 'Componentes'), ('Geral', 'Geral'), ('Outros', 'Outros'),
+    ]
+
+    nome = models.CharField('Nome', max_length=200, unique=True)
+    categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES, default='Outros')
+    valor = models.DecimalField('Valor cobrado (R$)', max_digits=10, decimal_places=2, default=0)
+    custo = models.DecimalField('Custo (R$)', max_digits=10, decimal_places=2, default=0)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['categoria', 'nome']
+        verbose_name_plural = 'Serviços'
+
+    def __str__(self):
+        return self.nome
+
+    @property
+    def margem(self):
+        return self.valor - self.custo
+
+
 class OrdemServico(models.Model):
     STATUS_CHOICES = [
         ('Aberta', 'Aberta'),

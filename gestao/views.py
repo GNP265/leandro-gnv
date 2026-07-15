@@ -9,31 +9,8 @@ from datetime import timedelta, date
 from decimal import Decimal
 from collections import Counter
 import csv, json, calendar as cal
-from .models import OrdemServico, Colaborador, ContaPagar
+from .models import OrdemServico, Colaborador, ContaPagar, Servico
 
-SERVICOS_3G = [
-    'Regulagem de kit 3ª geração','Pacote limpeza do sistema GNV – 3ª geração',
-    'Limpeza de redutor (avulso)','Instalação de kit GNV usado – 3ª geração (só mão de obra)',
-    'Variador de avanço cabeado (Panda, Spaid e similares)','Redutor de pressão – 3ª geração',
-    'Emulador de bicos injetores','Mangueira – 3ª geração','Caixinha do kit – 3ª geração',
-]
-SERVICOS_5G = [
-    'Regulagem de kit 5ª geração','Pacote limpeza do sistema GNV – 5ª geração',
-    'Limpeza de flauta TBI MAP – 5ª geração (avulso)','Instalação de kit GNV usado – 5ª geração (só mão de obra)',
-    'Redutor de pressão – 5ª geração','Simulador de sonda IGT S7','Sensor MAP – 5ª geração',
-    'Filtro do GNV – 5ª geração','Kit mangueiras 5ª geração (3 mangueiras)',
-]
-SERVICOS_COMP = [
-    'Válvula de abastecimento – marca ITA','Válvula de abastecimento – marca Presso',
-    'Válvula de abastecimento – marca IGT','Instalação de válvula externa (boca do tanque)',
-    'Troca de tubo de alta – carro de passeio','Troca de tubo de alta – pick-up',
-    'Manômetro universal','Sensor de temperatura','Regulagem de fluxo – plástico',
-    'Regulagem de fluxo – alumínio',
-]
-SERVICOS_GER = [
-    'Retirada do GNV (mão de obra + nota fiscal)','Teste hidrostático de cilindro (INMETRO)',
-    'Vistoria técnica para DETRAN','Laudo de instalação (ART/RRT)','Diagnóstico eletrônico do kit',
-]
 CHECKLIST_ITEMS = [
     'Teste de estanqueidade (vazamento)','Pressão do sistema GNV','Calibração do redutor',
     'Filtro de gás verificado','Mangueiras sem dobras / rachaduras','Válvula de cilindro operacional',
@@ -43,9 +20,15 @@ CHECKLIST_ITEMS = [
 ]
 
 def _ctx_servicos():
+    ativos = list(Servico.objects.filter(ativo=True))
+    grupos = []
+    for cat, _ in Servico.CATEGORIA_CHOICES:
+        itens = [s for s in ativos if s.categoria == cat]
+        if itens:
+            grupos.append((cat, itens))
     return {
-        'servicos_3g': SERVICOS_3G, 'servicos_5g': SERVICOS_5G,
-        'servicos_comp': SERVICOS_COMP, 'servicos_ger': SERVICOS_GER,
+        'servicos_grupos': grupos,
+        'servicos_precos': {s.nome: [float(s.valor), float(s.custo)] for s in ativos},
         'checklist_items': CHECKLIST_ITEMS,
         'colaboradores': Colaborador.objects.filter(ativo=True),
         'pagamento_choices': OrdemServico.PAGAMENTO_CHOICES,
@@ -260,6 +243,57 @@ def os_detail_json(request, pk):
         'pagamento': os.pagamento, 'status': os.status,
         'checklist': os.checklist.split(';') if os.checklist else [],
     })
+
+
+# --- Cadastro de Serviços ---
+@login_required
+def servicos(request):
+    q = request.GET.get('q', '')
+    lista = Servico.objects.filter(ativo=True)
+    if q:
+        lista = lista.filter(nome__icontains=q)
+    ctx = {
+        'servicos_list': lista, 'q': q,
+        'total_servicos': Servico.objects.filter(ativo=True).count(),
+        'categoria_choices': Servico.CATEGORIA_CHOICES,
+        'page': 'servicos',
+    }
+    return render(request, 'gestao/servicos.html', ctx)
+
+@login_required
+def servico_save(request):
+    if request.method != 'POST':
+        return redirect('servicos')
+    servico_id = request.POST.get('servico_id')
+    s = Servico.objects.get(pk=servico_id) if servico_id else Servico()
+    nome = request.POST.get('nome', '').strip()
+    if not nome:
+        messages.error(request, 'O nome do serviço é obrigatório.')
+        return redirect('servicos')
+    if Servico.objects.filter(nome=nome).exclude(pk=s.pk or 0).exists():
+        messages.warning(request, f'Já existe um serviço chamado "{nome}".')
+        return redirect('servicos')
+    s.nome = nome
+    s.categoria = request.POST.get('categoria', 'Outros')
+    s.valor = Decimal(request.POST.get('valor', '0') or '0')
+    s.custo = Decimal(request.POST.get('custo', '0') or '0')
+    s.save()
+    messages.success(request, f'Serviço "{s.nome}" salvo!')
+    return redirect('servicos')
+
+@login_required
+def servico_delete(request, pk):
+    s = get_object_or_404(Servico, pk=pk)
+    nome = s.nome
+    s.delete()
+    messages.success(request, f'Serviço "{nome}" excluído. (As OS antigas que o usaram não são alteradas.)')
+    return redirect('servicos')
+
+@login_required
+def servico_detail_json(request, pk):
+    s = get_object_or_404(Servico, pk=pk)
+    return JsonResponse({'id': s.pk, 'nome': s.nome, 'categoria': s.categoria,
+                         'valor': str(s.valor), 'custo': str(s.custo)})
 
 
 # --- Financeiro ---

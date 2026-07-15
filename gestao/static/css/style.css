@@ -187,6 +187,11 @@ tr.clickable{cursor:pointer}
 .semana-day.hoje .semana-num{color:#7C3AED}
 .semana-vazio{font-size:10px;color:#C4B5FD}
 
+/* Botões de ícone (editar/excluir minimalistas) */
+.icon-btn{background:transparent;border:none;color:#9C7DC4;padding:6px 8px;border-radius:9999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;vertical-align:middle}
+.icon-btn:hover{background:#EDE6F7;color:#5B21B6}
+.icon-btn.icon-danger:hover{background:#FEE2E2;color:#B91C1C}
+
 /* Filtros dos gráficos */
 .chart-filter{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:7px 14px;border:2px solid transparent;border-radius:9999px;background:#EDE6F7;color:#5B21B6;cursor:pointer}
 .chart-filter:focus{outline:none;border-color:#7C3AED}
